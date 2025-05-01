@@ -1,9 +1,15 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-#아래는 2줄은 FastAPI에서 /openapi.json 엔드포인트 추가하기 위한 부분
+#아래 2줄은 FastAPI에서 /openapi.json 엔드포인트 추가하기 위한 부분
 from fastapi.responses import FileResponse
 import os
+
+#아래 4줄은 openai GPT 호출과 환경변수 로딩을 가능하게 하기 위한 부분
+import openai
+from dotenv import load_dotenv
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 
