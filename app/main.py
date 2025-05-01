@@ -23,7 +23,7 @@ class AnalyzeResponse(BaseModel):
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(request: AnalyzeRequest):
     sentence = request.sentence
-    diagram = f"DrawEnglish diagram for: '{sentence}'"
+    diagram = f"DrawEnglish diagram for openai: '{sentence}'"
     return {"sentence": sentence, "diagramming": diagram}
 
 #아래는 함수는 FastAPI에서 /openapi.json 엔드포인트 추가하기 위한 부분
