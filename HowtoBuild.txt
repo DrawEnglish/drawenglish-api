@@ -6,7 +6,7 @@ FastAPI + GitHub + Render로 DrawEnglish API 다시 구축
 - Render에 배포해서
 - Custom GPT에 OpenAPI 연결
 
-1️⃣ 로컬에서 FastAPI 프로젝트 만들기
+1. 로컬에서 FastAPI 프로젝트 만들기
 
 - 기본 폴더 구조
 drawenglish-api/
@@ -16,16 +16,16 @@ drawenglish-api/
 ├── README.md
 ├── requirements.txt     👈 의존성 (FastAPI, Uvicorn 등)
 
-2️⃣ FastAPI 코드(app/main.py)
+2. FastAPI 코드(app/main.py)
 
-3️⃣ OpenAPI 코드 (openapi.json)
+3. OpenAPI 코드 (openapi.json)
 👉 배포 후 RENDER_URL 자리에 실제 Render 주소 넣어줘야 해
 
-4️⃣ requirements.txt
+4. requirements.txt
 fastapi
 uvicorn
 
-5️⃣ GitHub에 업로드
+5. GitHub에 업로드
 1. 로컬 폴더 만든 후 위 파일 구성
 2. GitHub 레포지토리 생성 (예 : drawenglish-api)
 3. 다음 명령어
@@ -36,7 +36,7 @@ git add .
 git commit -m "Initial commit"
 git push -u origin main
 
-6️⃣ Render에 배포
+6. Render에 배포
 1. https://render.com → 새 Web Service 생성
 2. GitHub 연동 후 drawenglish-api 선택
 3. 환경설정
@@ -162,7 +162,8 @@ pip freeze > requirements.txt  → 로컬에 파일 만들어지고 아래 것�
   uvicorn==0.34.2
 
 pip install -r requirements.txt
-  requirements.txt에 입력된 구성요소들이 (로컬에??) 설치됨?
+  이 명령을 로컬에서 실행하면 requirements.txt에 입력된 구성요소들이 로컬에 설치됨
+  이 파일을 github에 저장해 놓으면 render 같은 서버환경에 파이썬 패키지들을 설치하는 것임
 
 ※ git push는 "커밋된 변경사항"만 올려. 먼저 push할 파일을 add하고 commit해야 함.
 git add requirements.txt
@@ -416,7 +417,7 @@ pip install python-dotenv
 다른 PC에서 개발환경을 구축(동기화)하고자 할때
 ----------------------------------------------
 
-1️⃣PC에서 기존 C:\drawenglish-api 폴더 정리
+1.PC에서 기존 C:\drawenglish-api 폴더 정리
 먼저 깨끗하게 시작할 거야.
 만약 C:\drawenglish-api 폴더 안에 의미 없는 파일(비어있거나 쓰다만 거) 있다면
 그 폴더를 통째로 삭제해줘.
@@ -424,7 +425,7 @@ pip install python-dotenv
 
 C:\drawenglish-api (❌ 삭제 또는 폴더명 변경)
 
-2️⃣ 새로 GitHub에서 프로젝트 복제 (clone)
+2. 새로 GitHub에서 프로젝트 복제 (clone)
 아예 처음부터 GitHub에서 최신 파일을 가져오자!
 터미널(cmd) 또는 Git Bash 열고:
 
@@ -436,7 +437,7 @@ C:\drawenglish-api\ 폴더가 자동으로 만들어지고
 GitHub에 있던 최신 코드가 다 내려와!
 ✅ 여기에는 app/main.py, openapi.json, .git 폴더까지 다 들어올 거야.
 
-3️⃣ 내려왔는지 확인
+3. 내려왔는지 확인
 
 cd drawenglish-api
 dir
@@ -448,7 +449,7 @@ requirements.txt (있다면)
 .git (숨김 파일)
 이런 파일/폴더가 보이면 성공이야! ✨
 
-4️⃣ 가상환경(venv) 다시 세팅 (선택)
+4. 가상환경(venv) 다시 세팅 (선택)
 만약 새로운 컴퓨터 환경이라면:
 python -m venv venv
 .\venv\Scripts\activate
@@ -464,7 +465,7 @@ uvicorn app.main:app --reload
 http://127.0.0.1:8000/docs 웹페이지 열림
 
 
-5️⃣ 뭔가 작업 후엔 반드시 커밋 + 푸시
+5. 뭔가 작업 후엔 반드시 커밋 + 푸시
 git add .
 git commit -m "Update diagram logic"
 git push origin main
