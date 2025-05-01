@@ -332,6 +332,24 @@ GPTs 링크 공유하기
   예) https://chatgpt.com/g/g-6810dd0c0df48191afb83d3bb158e20a-draw-english-sentence-diagramming
 
 
+■ GPTs에 개인정보보호정책 설정(privacy.html 연결)
+
+c:\drawenglish-api 폴더에 privacy.html 만들고 아래 소스 입력
+<!-- privacy.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Privacy Policy</title>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p>This service does not collect or store any personal data.</p>
+  <p>All user inputs are processed in real-time and are not saved.</p>
+</body>
+</html>
+☞ 저장하고 커밋 후 푸시
+
 
 
 ■■■  DrawEnglish 엔진(Fast API?) + OpenAI GPT-4 API에 지침(prompt) 지침 연동
@@ -341,6 +359,52 @@ GPTs 링크 공유하기
 pip install openai
 ✅ 네 OpenAI API 키를 서버에 설정 (Tip: .env 파일로 숨겨두는 걸 추천해!)
 OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
+
+
+■ API 키관리
+
+1) 로컬을 위한 세팅
+c:\drawenglish-api 폴더에 .env 파일 생성 아래 입력하고 저장
+OPENAI_API_KEY=키값
+ ※.env는 절대 GitHub에 업로드 하면 안됨(하려고 해도 경고/에러 메시지 남)
+c:\drawenglish-api 폴더에 .gitignore 파일 생성하고 아래 입력하고 저장
+.env
+__pycache__/
+*.pyc
+ ※ 이로인해 .env가 업로드 되는 것을 방지한다.
+
+2) Render에 OpenAI 키 등록하기(Render에서 환경변수 설정)
+Render에 로그인 후 배포한 서비스(Project) 선택(예: drawenglish-api)
+상단 탭에서 “Environment” 또는 “Environment Variables” 클릭
+Key에 → OPENAI_API_KEY
+Value에 → sk-xxxxxxxxxxxxxx 키 값 입력
+저장 (자동 적용됨)
+ ※ 그럼 서버가 재시작될 때 이 환경변수가 자동으로 적용돼!
+
+
+■ main.py에 필요한 소스 입력
+
+#아래 2줄은 FastAPI에서 /openapi.json 엔드포인트 추가하기 위한 부분
+from fastapi.responses import FileResponse
+import os
+
+#아래 4줄은 openai GPT 호출과 환경변수 로딩을 가능하게 하기 위한 부분
+import openai
+from dotenv import load_dotenv
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+#아래는 함수는 FastAPI에서 /openapi.json 엔드포인트 추가하기 위한 부분
+@app.get("/custom-openapi.json", include_in_schema=False)
+async def serve_openapi():
+    file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
+    return FileResponse(file_path, media_type="application/json")
+
+☞ 위의 dotenv 관련 설정이 작동되기 위해 python-dotenv를 설치해야함.
+pip install python-dotenv
+
+
+
 
 
 
