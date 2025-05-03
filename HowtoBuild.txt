@@ -482,6 +482,22 @@ git push origin main
    uvicorn app.main:app --reload
 
 
+■■■ Python 콘솔에서 소스 테스트 하고 싶을때
+
+cd c:\drawenglish-api\app   #app폴더로 이동해야함.
+
+python
+
+from main import print_parsed_roles
+또는 별도의 py로 만들었을 경우
+from analyzer_utils import print_parsed_roles
+
+print_parsed_roles("She loves music.")
+
+
+
+
+
 
 기타 참고사항
 -------------
@@ -489,4 +505,5 @@ git push origin main
 main.py와 openapi.json은 맞추어서 수정해 주어야 한다.
 
 Python 코드 작업을 수월하게 하고 싶다면 VS Code 설치
+
 
