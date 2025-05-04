@@ -488,17 +488,58 @@ git push origin main
 ■ cmd창에서 직접 실행
 (venv) C:\drawenglish-api> python app/main.py
 
-■ 또는 Python 콘솔로 진입해서하는 방법
-
+또는 Python 콘솔로 진입해서하는 방법
 cd c:\drawenglish-api\app   #app폴더로 이동해야함.
-
 python
-
 >>> from main import print_parsed_roles
+
 또는 별도의 py로 만들었을 경우
 from test_tools import print_parsed_roles
 
 print_parsed_roles("She loves music.")
+
+
+■ GPT 파싱결과와 문장도식 결과 확인
+
+(venv) C:\drawenglish-api> python
+
+>>> from app.main import store_characters, gpt_parse, apply_symbols, generate_diagram
+
+>>> sentence = "The weather is beautiful"
+>>> store_characters(sentence)
+>>> parsed = gpt_parse(sentence)
+>>> apply_symbols(parsed)
+>>> print(generate_diagram())
+>>> print(parsed)  # 파싱결과 확인
+또는 
+import json
+>>> print(json.dumps(parsed, indent=2))
+
+
+위 과정을 통합 함수로 이용하는 방법
+(venv) C:\drawenglish-api> python
+>>> from app.main import store_characters, gpt_parse, apply_symbols, generate_diagram, test
+
+---------------------이건 함수-------------------------
+def test(sentence: str):
+    print("\n🟦 입력 문장:", sentence)
+    store_characters(sentence)
+    parsed = gpt_parse(sentence)
+    print("\n[🔍 Parsed Result]")
+    for item in parsed:
+        word = item.get("word", "")
+        role = item.get("role", "")
+        print(f"- {word}: {role}")
+    apply_symbols(parsed)
+    print("\n[🖨 Diagram]")
+    print(generate_diagram())
+    return parsed  # 원하면 외부에서 쓸 수 있도록 반환
+-------------------------------------------------------
+
+아래 명령으로 이용
+from app.main import test
+>>> test("I give him a book.")
+
 
 
 
