@@ -1,4 +1,4 @@
-from main import gpt_parse
+from app.main import gpt_parse
 
 # ✅ 분석 결과를 콘솔에 출력 (디버깅용)
 def print_parsed_roles(sentence: str):
