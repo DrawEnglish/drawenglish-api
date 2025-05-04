@@ -484,13 +484,19 @@ git push origin main
 
 ■■■ Python 콘솔에서 소스 테스트 하고 싶을때
 
+
+■ cmd창에서 직접 실행
+(venv) C:\drawenglish-api> python app/main.py
+
+■ 또는 Python 콘솔로 진입해서하는 방법
+
 cd c:\drawenglish-api\app   #app폴더로 이동해야함.
 
 python
 
-from main import print_parsed_roles
+>>> from main import print_parsed_roles
 또는 별도의 py로 만들었을 경우
-from analyzer_utils import print_parsed_roles
+from test_tools import print_parsed_roles
 
 print_parsed_roles("She loves music.")
 

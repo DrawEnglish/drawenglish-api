@@ -1,25 +1,44 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-from fastapi.responses import FileResponse
-from dotenv import load_dotenv
-from openai import OpenAI
-from app.test_tools import print_parsed_roles # 파싱결과출력용 외부함수
+# ---------------------------------------------------
+# 1. ✅ 환경 초기화 및 GPT 클라이언트 설정
+# ---------------------------------------------------
 import os
 import json
+from dotenv import load_dotenv
+from openai import OpenAI
 
-# ✅ 환경 변수 로드 및 GPT 클라이언트 초기화
 load_dotenv()
-client = OpenAI()  # .env 파일의 OPENAI_API_KEY를 자동 인식함
+client = OpenAI()  # .env에 저장된 OPENAI_API_KEY 자동 사용
+
+# ---------------------------------------------------
+# 2. ✅ FastAPI 객체 생성
+# ---------------------------------------------------
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 app = FastAPI()
 
-# ✅ 메모리 구조 (문자 + 심볼)
+# ---------------------------------------------------
+# 3. ✅ 요청/응답 모델 정의 (Pydantic)
+# ---------------------------------------------------
+class AnalyzeRequest(BaseModel):
+    sentence: str
+
+class AnalyzeResponse(BaseModel):
+    sentence: str
+    diagramming: str
+
+# ---------------------------------------------------
+# 4. ✅ GPT 분석 및 처리 함수
+# ---------------------------------------------------
+
+# ⬅️ 메모리 구조 (문자 + 심볼)
 memory = {
     "characters": [],
     "symbols": []
 }
 
-# ✅ 문법 역할 → 심볼 매핑
+# ⬅️ 역할 → 심볼 매핑
 role_to_symbol = {
     "subject": "S",
     "verb": "○",
@@ -29,20 +48,12 @@ role_to_symbol = {
     "conjunction": "◇"
 }
 
-# ✅ 요청/응답 모델 정의
-class AnalyzeRequest(BaseModel):
-    sentence: str
-
-class AnalyzeResponse(BaseModel):
-    sentence: str
-    diagramming: str
-
-# ✅ 문자 저장 (심볼 공간 초기화)
+# ⬅️ 문자 저장 함수
 def store_characters(sentence: str):
     memory["characters"] = list(sentence)
     memory["symbols"] = [" " for _ in memory["characters"]]
 
-# ✅ GPT를 통해 문장 분석
+# ⬅️ GPT 호출 함수
 def gpt_parse(sentence: str):
     prompt = f"""
 Analyze the following English sentence.
@@ -58,7 +69,6 @@ Return the result as a JSON array with this format:
 
 Sentence: "{sentence}"
 """
-
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -75,7 +85,31 @@ Sentence: "{sentence}"
     except json.JSONDecodeError:
         return []
 
-# ✅ /analyze 엔드포인트 - Swagger UI에서 확인 가능
+# ---------------------------------------------------
+# 5. ✅ 디버깅용: 분석 결과 콘솔 출력 함수
+# ---------------------------------------------------
+def print_parsed_roles(sentence: str):
+    parsed_result = gpt_parse(sentence)
+
+    if not parsed_result:
+        print("❌ GPT 응답을 파싱하지 못했습니다.")
+        return
+
+    for item in parsed_result:
+        word = item.get("word")
+        role = item.get("role")
+        print(f"{word} - {role}")
+
+# 단독 실행 시 테스트
+if __name__ == "__main__":
+    print_parsed_roles("I love you.")
+    print_parsed_roles("She gave me a book.")
+
+# ---------------------------------------------------
+# 6. ✅ FastAPI 라우터 함수 정의
+# ---------------------------------------------------
+
+# ⬅️ POST /analyze - 문장 분석 결과 반환
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(request: AnalyzeRequest):
     sentence = request.sentence
@@ -89,7 +123,7 @@ async def analyze(request: AnalyzeRequest):
 
     return {"sentence": sentence, "diagramming": diagram}
 
-# ✅ custom-openapi.json 제공 (GPTs용)
+# ⬅️ GET /custom-openapi.json - GPTs용 OpenAPI 제공
 @app.get("/custom-openapi.json", include_in_schema=False)
 async def serve_openapi():
     file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
