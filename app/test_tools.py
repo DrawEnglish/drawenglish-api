@@ -1,4 +1,4 @@
-from app.main import gpt_parse
+# from app.main import gpt_parse  #이 파일로 직접 실행하고자 할때 사용
 
 # ✅ 분석 결과를 콘솔에 출력 (디버깅용)
 def print_parsed_roles(sentence: str):
