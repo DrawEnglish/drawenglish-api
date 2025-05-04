@@ -322,7 +322,7 @@ main.py의 내용에서 openapi.json을 custom-openapi.json 으로 수정함.
 GitHub Commit하고 Push → Render Deploying
 ☞ server 부분 확실히 있음
 
-GPTs에서 스키마 URL에서 가져오기에 이래 주소 입력 후 가져오기
+GPTs에서 스키마 URL에서 가져오기에 아래 주소 입력 후 가져오기
 https://drawenglish-api.onrender.com/custom-openapi.json
 ☞ 성공함!!!
 
