@@ -4,11 +4,16 @@
     "title": "DrawEnglish API",
     "version": "1.0.0"
   },
+  "servers": [
+    {
+      "url": "https://drawenglish-api.onrender.com"
+    }
+  ],
   "paths": {
     "/analyze": {
       "post": {
         "operationId": "analyzeSentence",
-        "summary": "Analyze a sentence",
+        "summary": "Analyze an English sentence",
         "requestBody": {
           "required": true,
           "content": {

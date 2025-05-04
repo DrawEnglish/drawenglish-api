@@ -507,3 +507,20 @@ main.py와 openapi.json은 맞추어서 수정해 주어야 한다.
 Python 코드 작업을 수월하게 하고 싶다면 VS Code 설치
 
 
+
+작업 전 조치사항
+----------------
+
+python -m venv venv
+venv\Scripts\activate
+
+git add .
+git commit -m "Update DrawEnglish-API"
+git push origin main
+
+pip freeze > requirements.txt
+
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+
+
