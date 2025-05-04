@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from openai import OpenAI
-from test_tools import print_parsed_roles
+from app.test_tools import print_parsed_roles # 파싱결과출력용 외부함수
 import os
 import json
 
