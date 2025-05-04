@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from openai import OpenAI
+from test_tools import print_parsed_roles
 import os
 import json
 
@@ -73,19 +74,6 @@ Sentence: "{sentence}"
         return json.loads(content)
     except json.JSONDecodeError:
         return []
-
-# ✅ 분석 결과를 콘솔에 출력 (디버깅용)
-def print_parsed_roles(sentence: str):
-    parsed_result = gpt_parse(sentence)
-
-    if not parsed_result:
-        print("❌ GPT 응답을 파싱하지 못했습니다.")
-        return
-
-    for item in parsed_result:
-        word = item.get("word")
-        role = item.get("role")
-        print(f"{word} - {role}")
 
 # ✅ /analyze 엔드포인트 - Swagger UI에서 확인 가능
 @app.post("/analyze", response_model=AnalyzeResponse)
