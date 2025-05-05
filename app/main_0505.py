@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import os
 import json
-import re #python 정규표현식(Regular Expression) 모듈
 
 # --------------------------------------------------
 # 1. 환경 초기화
@@ -119,44 +118,23 @@ Sentence: "{sentence}"
 # 7. GPT 결과 기반 심볼 적용 + 후처리 검증
 # --------------------------------------------------
 def apply_symbols(parsed_result):
-    char_join = ''.join(memory["characters"])
-    char_lower = char_join.lower()
-    symbol_line = memory["symbols"]
-
-    word_positions = [(m.group(), m.start()) for m in re.finditer(r'\b\w+\b', char_lower)]
-    used_indices = set()
-
-    # ✅ 1. 가장 마지막 "verb" 역할 단어만 심볼 표시 대상
-    last_verb_word = None
-    for item in reversed(parsed_result):
-        if item.get("role", "").lower() == "verb":
-            last_verb_word = item.get("word", "").lower()
-            break
+    char_join = ''.join(memory["characters"]).lower()
 
     for item in parsed_result:
         word = item.get("word", "").lower()
         role = item.get("role", "").lower()
 
-        # ✅ 후처리: 관사는 무조건 무시
-        if word in ["a", "an", "the"]:
-            continue
-
-        # ✅ verb가 여러 개면 마지막만 심볼 표시
-        if role == "verb" and word != last_verb_word:
+        # ❗ 후처리: 잘못된 preposition 제거
+        if role == "preposition" and word in ["a", "an", "the"]:
             continue
 
         symbol = role_to_symbol.get(role, " ")
         if not symbol.strip():
             continue
 
-        for token, pos in word_positions:
-            if token == word and pos not in used_indices:
-                symbol_line[pos] = symbol
-                used_indices.add(pos)
-                break
-
-
-
+        index = char_join.find(word)
+        if index != -1:
+            memory["symbols"][index] = symbol
 
 # --------------------------------------------------
 # 8. 다이어그램 생성
