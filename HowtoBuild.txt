@@ -503,22 +503,22 @@ print_parsed_roles("She loves music.")
 
 (venv) C:\drawenglish-api> python
 
->>> from app.main import store_characters, gpt_parse, apply_symbols, generate_diagram
+from app.main import store_characters, gpt_parse, apply_symbols, print_diagram
 
->>> sentence = "The weather is beautiful"
->>> store_characters(sentence)
->>> parsed = gpt_parse(sentence)
->>> apply_symbols(parsed)
->>> print(generate_diagram())
->>> print(parsed)  # 파싱결과 확인
+sentence = "The weather is beautiful"
+store_characters(sentence)
+parsed = gpt_parse(sentence)
+apply_symbols(parsed)
+print(generate_diagram())
+print(parsed)
 또는 
 import json
->>> print(json.dumps(parsed, indent=2))
+print(json.dumps(parsed, indent=2))
 
 
 위 과정을 통합 함수로 이용하는 방법
 (venv) C:\drawenglish-api> python
->>> from app.main import store_characters, gpt_parse, apply_symbols, generate_diagram, test
+from app.main import store_characters, gpt_parse, apply_symbols, print_diagrams, parse_test
 
 ---------------------이건 함수-------------------------
 def test(sentence: str):
@@ -537,10 +537,41 @@ def test(sentence: str):
 -------------------------------------------------------
 
 아래 명령으로 이용
-from app.main import test
->>> test("I give him a book.")
+from app.main import parse_test
+parse_test("I give him a book.")
 
 
+
+■작업 전 조치사항
+----------------
+
+cd c:\drawenglish-api
+
+python -m venv venv
+venv\Scripts\activate
+
+git add .
+git commit -m "Update DrawEnglish-API"
+git push origin main
+
+pip freeze > requirements.txt
+
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+
+
+
+■ Python 파일 수정후 다시 로드하는 방법
+
+1. 빠져나갔다가 다시 로드
+>>> exit()
+(venv) C:\your_project> python
+>>> from app import main
+
+2. importlib.reload() 사용
+>>> import importlib
+>>> import app.main
+>>> importlib.reload(app.main)
 
 
 
@@ -555,19 +586,17 @@ Python 코드 작업을 수월하게 하고 싶다면 VS Code 설치
 
 
 
-작업 전 조치사항
-----------------
 
-python -m venv venv
-venv\Scripts\activate
 
-git add .
-git commit -m "Update DrawEnglish-API"
-git push origin main
+■ 전체 캐시 + 쿠키 삭제
 
-pip freeze > requirements.txt
+Ctrl + Shift + Delete  # 대화창의 전체 대화 삭제됨
 
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+chrome://settings/clearBrowserData
+
+F5(새로고침),  Ctrl + F5 (강력 새로고침 / 캐시 무시하고 다시 받아옴)
+
+※ 쿠키를 지우면 GPTs나 로그인된 서비스에서 로그아웃될 수 있어
+※ 캐시만 지우면 대개 로그인 유지됨 (안전함)
 
 

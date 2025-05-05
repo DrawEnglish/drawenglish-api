@@ -57,7 +57,7 @@ def gpt_parse(sentence: str):
     prompt = f"""
 Analyze the following English sentence.
 
-For each meaningful word (excluding punctuation), identify its grammatical role using the following labels:
+For each **meaningful word** (excluding punctuation), identify its grammatical role using **only** the following labels:
 - subject
 - verb
 - object
@@ -66,16 +66,37 @@ For each meaningful word (excluding punctuation), identify its grammatical role 
 - preposition
 - conjunction
 
-⚠️ Do NOT classify determiners such as "a", "an", or "the" as prepositions.
+### Instructions:
 
-Return the result as a JSON array in this format:
+1. Use 'noun complement' or 'adjective complement' **only** when the word describes:
+   - the subject after a linking verb (e.g., "He is a teacher"), or
+   - the object in an SVOC structure (e.g., "They elected him president").
+
+2. If the word is a direct or indirect object of a verb (e.g., "They offered us a job"), label it as 'object', **not** as a complement.
+
+3. Do **not** classify determiners like "a", "an", or "the" as prepositions.
+
+4. Do not include punctuation marks in the result.
+
+### Examples:
+
+- He is a teacher. → 'a teacher' = noun complement
+- They elected him president. → 'president' = noun complement
+- They offered us a job. → 'job' = object ✅
+- The dog chased the cat. → 'dog' = subject, 'chased' = verb, 'cat' = object
+
+Return the result as a JSON array. Each item should be an object with exactly two fields: "word" and "role". Do not include any explanations.
+
+Example:
 [
-  {{"word": "word", "role": "verb"}},
-  ...
+  {{"word": "I", "role": "subject"}},
+  {{"word": "love", "role": "verb"}},
+  {{"word": "you", "role": "object"}}
 ]
 
 Sentence: "{sentence}"
 """
+
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -84,17 +105,20 @@ Sentence: "{sentence}"
         ],
         temperature=0
     )
+
     content = response.choices[0].message.content
     try:
         return json.loads(content)
     except json.JSONDecodeError:
         return []
 
+
+
 # --------------------------------------------------
 # 7. GPT 결과 기반 심볼 적용 + 후처리 검증
 # --------------------------------------------------
 def apply_symbols(parsed_result):
-    text = ''.join(memory["characters"]).lower()
+    char_join = ''.join(memory["characters"]).lower()
 
     for item in parsed_result:
         word = item.get("word", "").lower()
@@ -108,14 +132,14 @@ def apply_symbols(parsed_result):
         if not symbol.strip():
             continue
 
-        index = text.find(word)
+        index = char_join.find(word)
         if index != -1:
             memory["symbols"][index] = symbol
 
 # --------------------------------------------------
 # 8. 다이어그램 생성
 # --------------------------------------------------
-def generate_diagram():
+def print_diagrams():
     char_line = "".join(memory["characters"])
     symb_line = "".join(memory["symbols"])
     return f"{char_line}\n{symb_line}"
@@ -129,9 +153,9 @@ async def analyze(request: AnalyzeRequest):
     store_characters(sentence)
     parsed_result = gpt_parse(sentence)
     apply_symbols(parsed_result)
-    diagram = generate_diagram()
+    diagrams = print_diagrams()
 
-    return {"sentence": sentence, "diagramming": diagram}
+    return {"sentence": sentence, "diagramming": diagrams}
 
 # --------------------------------------------------
 # 10. GPTs용 custom-openapi.json 제공
@@ -144,7 +168,7 @@ async def serve_openapi():
 # --------------------------------------------------
 # 11. 콘솔 테스트 함수 (추가됨!)
 # --------------------------------------------------
-def test(sentence: str):
+def parse_test(sentence: str):
     print("\n🟦 입력 문장:", sentence)
     
     # 1. 문자 저장
@@ -162,12 +186,14 @@ def test(sentence: str):
 
     # 4. 심볼 적용 + 다이어그램 출력
     apply_symbols(parsed)
-    print("\n[🖨 Diagram]")
-    print(generate_diagram())
+    print("\n[🖨 Diagrams]")
+    print(print_diagrams())
+    import json
+    print(json.dumps(parsed, indent=2))
 
-    return parsed  # 원하면 외부에서 쓸 수 있도록 반환
+    # return parsed  # 원하면 외부에서 쓸 수 있도록 반환
 
 # 콘솔 실행용
 if __name__ == "__main__":
-    test("I give him a book.")
-    test("The weather is beautiful.")
+    parse_test("I give him a book.")
+    parse_test("The weather is beautiful.")
