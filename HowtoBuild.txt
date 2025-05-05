@@ -503,7 +503,7 @@ print_parsed_roles("She loves music.")
 
 (venv) C:\drawenglish-api> python
 
-from app.main import store_characters, gpt_parse, apply_symbols, print_diagram
+from app.main import store_characters, gpt_parse, apply_symbols, print_diagrams
 
 sentence = "The weather is beautiful"
 store_characters(sentence)

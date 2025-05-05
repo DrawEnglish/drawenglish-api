@@ -87,7 +87,8 @@ Sentence: "{sentence}"
 
     content = response.choices[0].message.content
     try:
-        return json.loads(content)
+        parsed = json.loads(content)
+        return [item for item in parsed if "word" in item and "role" in item]
     except json.JSONDecodeError:
         return []
 
@@ -96,34 +97,59 @@ def apply_symbols(parsed_result):
     char_line = ''.join(memory["characters"])
     char_lower = char_line.lower()
     symbol_line = memory["symbols"]
-    word_positions = [(m.group(), m.start()) for m in re.finditer(r'\b\w+\b', char_lower)]
-    used_indices = set()
 
-    # 마지막 verb만 표시 (조동사 제거용)
-    last_verb = None
-    for item in reversed(parsed_result):
-        if item.get("role", "").lower() == "verb":
-            last_verb = item.get("word", "").lower()
-            break
+    # 토큰 위치 추적
+    word_positions = []
+    for m in re.finditer(r'\b\w+\b', char_lower):
+        word_positions.append({
+            "token": m.group(),
+            "index": m.start(),
+            "used": False
+        })
 
-    for item in parsed_result:
+    # 관사 무시
+    skip_words = ["a", "an", "the"]
+
+    # ✅ 1. 모든 'verb'의 인덱스 추출
+    verb_indices = [i for i, item in enumerate(parsed_result) if item.get("role", "").lower() == "verb"]
+
+    # ✅ 2. 연속된 'verb' 그룹 중 마지막 항목만 표시
+    verbs_to_mark = set()
+    if verb_indices:
+        start = verb_indices[0]
+        for i in range(1, len(verb_indices)):
+            # 연속된 verb인지 확인
+            if verb_indices[i] == verb_indices[i - 1] + 1:
+                continue
+            # 이전 그룹의 마지막 verb 추가
+            verbs_to_mark.add(verb_indices[i - 1])
+            start = verb_indices[i]
+        # 마지막 그룹의 마지막 verb도 추가
+        verbs_to_mark.add(verb_indices[-1])
+
+    # ✅ 3. 심볼 적용
+    for i, item in enumerate(parsed_result):
         word = item.get("word", "").lower()
         role = item.get("role", "").lower()
 
-        if word in ["a", "an", "the"]:
+        if word in skip_words:
             continue
-        if role == "verb" and word != last_verb:
+
+        # 'verb'는 선택된 것만 표시
+        if role == "verb" and i not in verbs_to_mark:
             continue
 
         symbol = role_to_symbol.get(role, "")
         if not symbol.strip():
             continue
 
-        for token, idx in word_positions:
-            if token == word and idx not in used_indices:
-                symbol_line[idx] = symbol
-                used_indices.add(idx)
+        for pos in word_positions:
+            if pos["token"] == word and not pos["used"]:
+                symbol_line[pos["index"]] = symbol
+                pos["used"] = True
                 break
+
+
 
 # 8. 연결선 추가
 def connect_symbols(parsed_result):
