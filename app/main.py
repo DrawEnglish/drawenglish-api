@@ -209,24 +209,24 @@ def _connect(symbols, start, end):
 
 # 8. Í# 8. \xcd9c력 함수
 def print_diagram():
-    #diagram = diagram_filter_clean(memory["symbols"])  
-    #return f"\n{''.join(memory['characters'])}\n{''.join(diagram)}\n"  
+    diagram = diagram_filter_clean(memory["symbols"])  
+    return f"\n{''.join(memory['characters'])}\n{''.join(diagram)}\n"  
     #◇,▽후 1칸 보정 필요 없을시 위 2줄은 아래 1줄로 치환
-    return f"\n{''.join(memory['characters'])}\n{''.join(memory['symbols'])}\n"
+    #return f"\n{''.join(memory['characters'])}\n{''.join(memory['symbols'])}\n"
 
 
 # 8-1. 출력 복지 함수 (◇, ▽ 뒤 1칸 무시) #◇,▽후 1칸 보정 필요 없을시 이 함수 전체 필요 없음음
-#def diagram_filter_clean(diagram):
-#    cleaned = []
-#    skip_next = False
-#    for ch in diagram:
-#        if skip_next:
-#            skip_next = False
-#            continue
-#        cleaned.append(ch)
-#        if ch in {'▽', '◇'}:
-#            skip_next = True
-#    return cleaned
+def diagram_filter_clean(diagram):
+    cleaned = []
+    skip_next = False
+    for ch in diagram:
+        if skip_next:
+            skip_next = False
+            continue
+        cleaned.append(ch)
+        if ch in {'▽', '◇'}:
+            skip_next = True
+    return cleaned
 
 # 9. 디버깅용 테스트 함수
 def test(sentence: str, verbose: bool = True):
