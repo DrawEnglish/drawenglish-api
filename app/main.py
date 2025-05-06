@@ -50,29 +50,48 @@ def store_characters(sentence: str):
 # 5. GPT 파싱 함수
 def gpt_parse(sentence: str, verbose: bool = True):
     prompt = f"""
-Analyze the following sentence.
+Analyze the following English sentence and return a JSON array.
 
-Return a JSON array with one item per word.
 Each item must have:
-- word: the word itself
-- role: one of [subject, verb, object, subject noun complement, object noun complement, subject adjective complement, object adjective complement, preposition, conjunction]
-- (optional) combine: for verbs only. A list of objects or complements the verb connects to, as JSON objects with 'word' and 'role'.
+- "word": the word itself
+- "role": one of:
+  [subject, verb, object, subject noun complement, object noun complement, subject adjective complement, object adjective complement, preposition, conjunction]
+- (optional) "combine": only for main verbs OR prepositions. An array of objects with:
+  {{ "word": "...", "role": "..." }}
 
-Rules:
-1. Only ONE verb per clause (the main verb, last word in a verb group).
-2. For SVC/SVO/SVOO/SVOC, provide combine as:
-   - SVC: 1 complement
-   - SVO: 1 object
-   - SVOO: 2 objects
-   - SVOC: object + complement
-3. If a complement or object is a clause or phrase (e.g., to-infinitive, gerund, participle, that-clause), only list its starting word.
-4. For noun/adjective phrases (e.g., "the big red ball"), only list the head word (e.g., "ball").
-5. Preposition + object must be marked separately.
-6. Conjunctions are labeled but not connected.
+---
 
-Sentence: \"{sentence}\"
+🔹 RULES:
 
-Return ONLY the raw JSON array. Do not explain anything. Do not include any text outside the array.
+1. ✅ Use only ONE main verb per clause.
+   - If auxiliary verbs exist (e.g., "will have been eating"), only the FINAL main verb ("eating") must be labeled as `"role": "verb"`.
+
+2. ✅ Use `"combine"` only in these structures:
+   - SVO → 1 object
+   - SVOO → 2 objects
+   - SVOC → object + complement
+   - SVC → 1 subject complement
+   - ❌ SV → DO NOT use "combine" at all (even if a prepositional phrase or adverb follows)
+
+3. ✅ Prepositions may optionally use `"combine"` to point to their object (e.g., `"on"` → `"table"`), but verbs MUST NOT combine with prepositions.
+
+4. ✅ NEVER include any preposition, adverbial, or modifier in a verb’s "combine" list.
+   - Only include noun or adjective complements/objects.
+   - NEVER allow `"combine"` on intransitive verbs like "is", "seems", "arrived", etc.
+
+5. ✅ If the object/complement is a phrase or clause:
+   → Only include the **first word** of that phrase in the "combine" list.
+
+6. ✅ Ignore function words UNLESS they serve as heads:
+   - Skip: a, an, the, my, your, his, her, its, our, their, very, really, too, quickly, etc.
+
+7. ✅ Conjunctions should be labeled "conjunction" but must NOT be connected via "combine".
+
+---
+
+Sentence: "{sentence}"
+
+Return ONLY the raw JSON array. No explanation, no markdown, no extra text.
 """
 
     response = client.chat.completions.create(
@@ -114,7 +133,24 @@ def apply_symbols(parsed):
         if symbol and idx != -1 and symbols[idx] == " ":
             symbols[idx] = symbol
 
+        # ✅ combine 처리 (단, 전치사나 접속사는 연결선 그리지 않음)
         if role == "verb" and "combine" in item:
+            for target in item["combine"]:
+                t_word = target["word"].lower()
+                t_role = target["role"].lower()
+
+                # ⛔ 전치사, 접속사는 연결선 제외
+                if t_role in ["preposition", "conjunction"]:
+                    continue
+
+                t_symbol = role_to_symbol.get(t_role)
+                t_idx = find_unused(t_word)
+                if t_idx != -1 and t_symbol and symbols[t_idx] == " ":
+                    symbols[t_idx] = t_symbol
+                    _connect(symbols, idx, t_idx)
+
+        # ✅ 전치사에 combine이 있다면 (예: on → table)
+        if role == "preposition" and "combine" in item:
             for target in item["combine"]:
                 t_word = target["word"].lower()
                 t_role = target["role"].lower()
@@ -124,6 +160,7 @@ def apply_symbols(parsed):
                     symbols[t_idx] = t_symbol
                     _connect(symbols, idx, t_idx)
 
+    # ✅ 일반적인 전치사 + 목적어 구조 처리 (combine 없이 나올 경우 대비)
     for i in range(len(parsed) - 1):
         cur, nxt = parsed[i], parsed[i + 1]
         if cur["role"] == "preposition" and nxt["role"] == "object":
@@ -135,6 +172,7 @@ def apply_symbols(parsed):
                 symbols[n_idx] = role_to_symbol["object"]
             if c_idx != -1 and n_idx != -1:
                 _connect(symbols, c_idx, n_idx)
+
 
 # 7. 연결 함수
 def _connect(symbols, start, end):
@@ -150,6 +188,10 @@ def print_diagram():
 
 # 9. 디버깅용 테스트 함수
 def test(sentence: str, verbose: bool = True):
+    if not verbose:
+        import builtins
+        builtins.print = lambda *args, **kwargs: None
+
     print("\n==============================")
     print("🟦 입력 문장:", sentence)
 
