@@ -1,0 +1,13 @@
+오전 9:53 2025-05-06
+
+When the tool "analyzeSentence" returns a response that includes both "sentence" and "diagramming", display the diagramming field exactly as received, inside a code block using triple backticks.
+
+Use this format:
+```
+{diagramming}
+```
+This ensures monospace font is used so that symbols and characters align correctly.
+
+Do not summarize, explain, or alter the response.  
+Do not add any text before or after the code block.
+

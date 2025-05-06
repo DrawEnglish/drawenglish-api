@@ -55,53 +55,26 @@ For each meaningful word (excluding punctuation), identify its grammatical role 
 - preposition
 - conjunction
 
-### Rules:
+### Instructions:
 
-1. One main verb per clause:
-   - Each independent or dependent clause should have at most **one** word labeled as 'verb'.
-   - In compound sentences joined by a conjunction (e.g. "He ran and fell"), only the **first verb** in the clause should be labeled 'verb'.
-   - Do not label additional verbs if they are part of the same clause.
+1. Use 'noun complement' or 'adjective complement' **only** when the word describes:
+   - the subject after a linking verb (e.g., "He is a teacher"), or
+   - the object in an SVOC structure (e.g., "They elected him president").
 
-2. If a grammatical function spans multiple words, only tag the **core word**:
-   - e.g. "my friend" → only 'friend' with role 'noun complement'
-   - e.g. "the room" → only 'room' with role 'object'
-   - e.g. "very clean" → only 'clean' with role 'adjective complement'
+2. If the word is a direct or indirect object of a verb (e.g., "They offered us a job"), label it as 'object', not as a complement.
 
-3. Ignore the following unless they serve a grammatical role:
-   - Possessives (e.g. 'my', 'your', 'his')
-   - Articles (e.g. 'a', 'an', 'the')
-   - Modifiers and adverbs (e.g. 'very', 'quickly')
+3. Do not classify "a", "an", "the" as prepositions or objects.
 
-4. Return a JSON array like this:
+4. Do not include punctuation marks.
 
-Sentence: "I consider him my friend."
-
+Return a JSON array:
 [
-  {{ "word": "I", "role": "subject" }},
-  {{ "word": "consider", "role": "verb" }},
-  {{ "word": "him", "role": "object" }},
-  {{ "word": "friend", "role": "noun complement" }}
+  {{"word": "I", "role": "subject"}},
+  ...
 ]
 
 Sentence: "{sentence}"
-    """
-
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are an expert English grammar analyzer."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0
-    )
-
-    content = response.choices[0].message.content
-    try:
-        parsed = json.loads(content)
-        return [item for item in parsed if "word" in item and "role" in item]
-    except json.JSONDecodeError:
-        return []
-
+"""
 
     response = client.chat.completions.create(
         model="gpt-4",
@@ -125,7 +98,7 @@ def apply_symbols(parsed_result):
     char_lower = char_line.lower()
     symbol_line = memory["symbols"]
 
-    # 단어 위치 추적
+    # 토큰 위치 추적
     word_positions = []
     for m in re.finditer(r'\b\w+\b', char_lower):
         word_positions.append({
@@ -134,29 +107,27 @@ def apply_symbols(parsed_result):
             "used": False
         })
 
-    # 무시할 단어
-    skip_words = ["a", "an", "the", "my", "your", "his", "her", "their", "our", "its", "very", "too", "also"]
+    # 관사 무시
+    skip_words = ["a", "an", "the"]
 
-    # 역할별로 마지막 항목만 기록
-    last_indices = {}
-    for i, item in enumerate(parsed_result):
-        role = item.get("role", "").lower()
-        if role in role_to_symbol:
-            last_indices[role] = i
-
-    # 동사 그룹 처리 (조동사 + 본동사 → 마지막만 표시)
+    # ✅ 1. 모든 'verb'의 인덱스 추출
     verb_indices = [i for i, item in enumerate(parsed_result) if item.get("role", "").lower() == "verb"]
-    verb_groups = set()
+
+    # ✅ 2. 연속된 'verb' 그룹 중 마지막 항목만 표시
+    verbs_to_mark = set()
     if verb_indices:
         start = verb_indices[0]
         for i in range(1, len(verb_indices)):
+            # 연속된 verb인지 확인
             if verb_indices[i] == verb_indices[i - 1] + 1:
                 continue
-            verb_groups.add(verb_indices[i - 1])
+            # 이전 그룹의 마지막 verb 추가
+            verbs_to_mark.add(verb_indices[i - 1])
             start = verb_indices[i]
-        verb_groups.add(verb_indices[-1])
+        # 마지막 그룹의 마지막 verb도 추가
+        verbs_to_mark.add(verb_indices[-1])
 
-    # 심볼 적용
+    # ✅ 3. 심볼 적용
     for i, item in enumerate(parsed_result):
         word = item.get("word", "").lower()
         role = item.get("role", "").lower()
@@ -164,12 +135,8 @@ def apply_symbols(parsed_result):
         if word in skip_words:
             continue
 
-        # verb는 그룹의 마지막 것만 허용
-        if role == "verb" and i not in verb_groups:
-            continue
-
-        # 나머지 역할은 가장 마지막 항목만 허용
-        if role != "verb" and i != last_indices.get(role):
+        # 'verb'는 선택된 것만 표시
+        if role == "verb" and i not in verbs_to_mark:
             continue
 
         symbol = role_to_symbol.get(role, "")
@@ -183,12 +150,12 @@ def apply_symbols(parsed_result):
                 break
 
 
+
 # 8. 연결선 추가
 def connect_symbols(parsed_result):
     char_line = ''.join(memory["characters"]).lower()
-
-    # 역할별 심볼 위치 추적
     positions = []
+
     for item in parsed_result:
         word = item.get("word", "").lower()
         role = item.get("role", "").lower()
@@ -200,53 +167,21 @@ def connect_symbols(parsed_result):
                 positions.append({"role": role, "index": idx})
                 break
 
-    # 역할 목록
-    def find_first_index(role):
-        for p in positions:
-            if p["role"] == role:
-                return p["index"]
-        return None
+    for i in range(len(positions) - 1):
+        cur = positions[i]
+        nxt = positions[i + 1]
+        if (cur["role"] == "verb" and nxt["role"] in ["object", "noun complement", "adjective complement"]) or \
+           (cur["role"] == "object" and nxt["role"] in ["noun complement", "adjective complement"]) or \
+           (cur["role"] == "preposition" and nxt["role"] == "object") or \
+           (cur["role"] == "verb" and nxt["role"] == "verb"):
 
-    def find_last_index_among(roles):
-        for p in reversed(positions):
-            if p["role"] in roles:
-                return p["index"]
-        return None
-
-    # 연결 규칙 적용
-    # 1. verb → object/noun complement/adjective complement
-    verb_index = find_first_index("verb")
-    complement_index = find_last_index_among(["object", "noun complement", "adjective complement"])
-    if verb_index is not None and complement_index is not None and verb_index < complement_index:
-        for j in range(verb_index + 1, complement_index):
-            if memory["symbols"][j] == " ":
-                memory["symbols"][j] = "_"
-
-    # 2. object → 보어 (noun complement, adjective complement)
-    object_index = find_first_index("object")
-    object_complement_index = find_last_index_among(["noun complement", "adjective complement"])
-    if object_index is not None and object_complement_index is not None and object_index < object_complement_index:
-        for j in range(object_index + 1, object_complement_index):
-            if memory["symbols"][j] == " ":
-                memory["symbols"][j] = "_"
-
-    # 3. preposition → object
-    prep_index = find_first_index("preposition")
-    prep_obj_index = find_first_index("object")
-    if prep_index is not None and prep_obj_index is not None and prep_index < prep_obj_index:
-        for j in range(prep_index + 1, prep_obj_index):
-            if memory["symbols"][j] == " ":
-                memory["symbols"][j] = "_"
-
+            for j in range(cur["index"] + 1, nxt["index"]):
+                if memory["symbols"][j] == " ":
+                    memory["symbols"][j] = "_"
 
 # 9. 다이어그램 출력
-def print_diagrams_for_console():
-    char_line = ''.join(memory["characters"])
-    symbol_line = ''.join(memory["symbols"])
-    return f"\n{char_line}\n{symbol_line}"
-
 def print_diagrams():
-    return f"```\n{''.join(memory['characters'])}\n{''.join(memory['symbols'])}\n```"
+    return f"{''.join(memory['characters'])}\n{''.join(memory['symbols'])}"
 
 # 10. FastAPI 엔드포인트
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -275,7 +210,7 @@ def parse_test(sentence: str):
     apply_symbols(parsed)
     connect_symbols(parsed)
     print("\n[🖨 Diagram]")
-    print(print_diagrams_for_console())
+    print(print_diagrams())
     print("\n[📦 JSON]")
     print(json.dumps(parsed, indent=2))
 
