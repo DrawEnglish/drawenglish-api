@@ -37,9 +37,26 @@ class AnalyzeResponse(BaseModel):
     diagramming: str
 
 # 5. 문자 저장
+from copy import deepcopy
+
 def store_characters(sentence: str):
     memory["characters"] = list(sentence)
     memory["symbols"] = [" " for _ in memory["characters"]]
+
+    char_line = sentence.lower()
+    word_positions = []
+    for m in re.finditer(r'\b\w+\b', char_line):
+        word_positions.append({
+            "token": m.group(),
+            "index": m.start(),
+            "used": False
+        })
+
+    # 저장
+    memory["word_positions_base"] = word_positions  # 🔸 이건 디버깅용
+    memory["word_positions_for_symbols"] = deepcopy(word_positions)
+    memory["word_positions_for_links"] = deepcopy(word_positions)
+
 
 # 6. GPT 파싱
 def gpt_parse(sentence: str):
@@ -74,6 +91,11 @@ For each meaningful word (excluding punctuation), identify its grammatical role 
    also include a `"target"` field to indicate whether it completes the **subject** or the **object**.
    Use: `"target": "subject"` or `"target": "object"`
 
+5. Prepositional Phrases:
+   - If a noun follows a preposition and acts as its object, label it as 'object'.
+   - Do NOT label it as 'noun complement' or anything else.
+   - Example: In "under the table", 'table' → role: 'object'
+
 ### Examples:
 
 Sentence: "He is a teacher."
@@ -91,6 +113,15 @@ Sentence: "They elected him president."
   {{ "word": "elected", "role": "verb" }},
   {{ "word": "him", "role": "object" }},
   {{ "word": "president", "role": "noun complement", "target": "object" }}
+]
+
+Sentence: "She sat on the chair."
+
+[
+  {{ "word": "She", "role": "subject" }},
+  {{ "word": "sat", "role": "verb" }},
+  {{ "word": "on", "role": "preposition" }},
+  {{ "word": "chair", "role": "object" }}
 ]
 
 Sentence: "{sentence}"
@@ -120,7 +151,7 @@ def apply_symbols(parsed_result):
     symbol_line = memory["symbols"]
 
     # 단어 위치 추적
-    word_positions = []
+    word_positions = memory["word_positions_for_symbols"]
     for m in re.finditer(r'\b\w+\b', char_lower):
         word_positions.append({
             "token": m.group(),
@@ -179,58 +210,65 @@ def apply_symbols(parsed_result):
 
 # 8. 연결선 추가
 def connect_symbols(parsed_result):
-    char_line = ''.join(memory["characters"]).lower()
-
-    # 역할별 심볼 위치 추적
+    symbol_line = memory["symbols"]
+    word_positions = memory["word_positions_for_links"]
     positions = []
+
+    connection_logs = []  # 연결 디버깅용 로그
+
+    # 역할별 위치 추출
     for item in parsed_result:
         word = item.get("word", "").lower()
         role = item.get("role", "").lower()
         symbol = role_to_symbol.get(role, "")
 
-        for m in re.finditer(rf'\b{re.escape(word)}\b', char_line):
-            idx = m.start()
-            if memory["symbols"][idx] == symbol:
-                positions.append({"role": role, "index": idx})
+        for pos in word_positions:
+            if not pos["used"] and pos["token"] == word and symbol_line[pos["index"]] == symbol:
+                positions.append({
+                    "role": role,
+                    "index": pos["index"]
+                })
+                pos["used"] = True
                 break
 
-    # 역할 목록
-    def find_first_index(role):
-        for p in positions:
-            if p["role"] == role:
-                return p["index"]
-        return None
+    # 순서대로 연결 관계 판단
+    for i in range(len(positions) - 1):
+        cur = positions[i]
+        nxt = positions[i + 1]
 
-    def find_last_index_among(roles):
-        for p in reversed(positions):
-            if p["role"] in roles:
-                return p["index"]
-        return None
+        # 금지: verb → verb
+        if cur["role"] == "verb" and nxt["role"] == "verb":
+            continue
 
-    # 연결 규칙 적용
-    # 1. verb → object/noun complement/adjective complement
-    verb_index = find_first_index("verb")
-    complement_index = find_last_index_among(["object", "noun complement", "adjective complement"])
-    if verb_index is not None and complement_index is not None and verb_index < complement_index:
-        for j in range(verb_index + 1, complement_index):
-            if memory["symbols"][j] == " ":
-                memory["symbols"][j] = "_"
+        # 허용된 연결쌍만 처리
+        allowed = (
+            (cur["role"] == "verb" and nxt["role"] in ["object", "noun complement", "adjective complement"]) or
+            (cur["role"] == "object" and nxt["role"] in ["noun complement", "adjective complement"]) or
+            (cur["role"] == "preposition" and nxt["role"] == "object")
+        )
+        if not allowed:
+            continue
 
-    # 2. object → 보어 (noun complement, adjective complement)
-    object_index = find_first_index("object")
-    object_complement_index = find_last_index_among(["noun complement", "adjective complement"])
-    if object_index is not None and object_complement_index is not None and object_index < object_complement_index:
-        for j in range(object_index + 1, object_complement_index):
-            if memory["symbols"][j] == " ":
-                memory["symbols"][j] = "_"
+        # 연결 전에 해당 구간에 이미 밑줄이 있는지 확인
+        already_connected = any(symbol_line[j] == "_" for j in range(cur["index"] + 1, nxt["index"]))
+        if already_connected:
+            continue
 
-    # 3. preposition → object
-    prep_index = find_first_index("preposition")
-    prep_obj_index = find_first_index("object")
-    if prep_index is not None and prep_obj_index is not None and prep_index < prep_obj_index:
-        for j in range(prep_index + 1, prep_obj_index):
-            if memory["symbols"][j] == " ":
-                memory["symbols"][j] = "_"
+        # 연결선 그리기
+        for j in range(cur["index"] + 1, nxt["index"]):
+            if symbol_line[j] == " ":
+                symbol_line[j] = "_"
+
+        # 로그 기록
+        connection_logs.append({
+            "from": cur["index"],
+            "to": nxt["index"],
+            "role_from": cur["role"],
+            "role_to": nxt["role"],
+            "span": (cur["index"] + 1, nxt["index"] - 1)
+        })
+
+    return connection_logs
 
 
 # 9. 다이어그램 출력
@@ -258,7 +296,32 @@ async def serve_openapi():
     file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
     return FileResponse(file_path, media_type="application/json")
 
-# 11. 콘솔 테스트
+# 11. 심볼, 밑줄 그리기 디버깅 함수
+def debug_symbol_positions(parsed_result, connection_logs=None):
+    char_line = ''.join(memory["characters"])
+    symbol_line = ''.join(memory["symbols"])
+    index_line = ''.join([str(i % 10) for i in range(len(char_line))])
+
+    print("\n🧪 [DEBUG] 문자 인덱스:")
+    print(index_line)
+    print(char_line)
+    print(symbol_line)
+
+    print("\n🔍 [DEBUG] 단어별 위치 및 역할:")
+    word_positions = memory.get("word_positions_base", [])
+    for item in parsed_result:
+        word = item.get("word", "")
+        role = item.get("role", "")
+        idxs = [p["index"] for p in word_positions if p["token"] == word]
+        print(f"- {word:10s} → {role:20s} at positions {idxs}")
+
+    if connection_logs:
+        print("\n🔗 [DEBUG] 연결된 밑줄:")
+        for log in connection_logs:
+            print(f"- {log['role_from']:10s} → {log['role_to']:20s} at {log['span']}")
+
+
+# 12. 콘솔 테스트
 def parse_test(sentence: str):
     print("\n==============================")
     print("🟦 입력 문장:", sentence)
@@ -270,11 +333,13 @@ def parse_test(sentence: str):
     print(json.dumps(parsed, indent=2))
 
     apply_symbols(parsed)
-    connect_symbols(parsed)
+    connection_logs = connect_symbols(parsed)
 
     print("\n🖨 Diagram:")
     print(print_diagrams_for_console())
     print("==============================\n")
+
+    debug_symbol_positions(parsed, connection_logs)
 
 
 if __name__ == "__main__":
