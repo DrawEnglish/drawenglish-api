@@ -58,29 +58,39 @@ For each meaningful word (excluding punctuation), identify its grammatical role 
 ### Rules:
 
 1. One main verb per clause:
-   - Each independent or dependent clause should have at most **one** word labeled as 'verb'.
-   - In compound sentences joined by a conjunction (e.g. "He ran and fell"), only the **first verb** in the clause should be labeled 'verb'.
-   - Do not label additional verbs if they are part of the same clause.
+   - Each clause should have at most one word labeled as 'verb'.
+   - In compound sentences joined by a conjunction (e.g. "He ran and fell"), only the first verb in the clause should be labeled 'verb'.
 
 2. If a grammatical function spans multiple words, only tag the **core word**:
    - e.g. "my friend" → only 'friend' with role 'noun complement'
-   - e.g. "the room" → only 'room' with role 'object'
    - e.g. "very clean" → only 'clean' with role 'adjective complement'
 
-3. Ignore the following unless they serve a grammatical role:
-   - Possessives (e.g. 'my', 'your', 'his')
-   - Articles (e.g. 'a', 'an', 'the')
-   - Modifiers and adverbs (e.g. 'very', 'quickly')
+3. Ignore:
+   - Articles: 'a', 'an', 'the'
+   - Possessives: 'my', 'your', etc.
+   - Modifiers and adverbs like 'very', 'quickly'
 
-4. Return a JSON array like this:
+4. For any 'noun complement' or 'adjective complement', 
+   also include a `"target"` field to indicate whether it completes the **subject** or the **object**.
+   Use: `"target": "subject"` or `"target": "object"`
 
-Sentence: "I consider him my friend."
+### Examples:
+
+Sentence: "He is a teacher."
 
 [
-  {{ "word": "I", "role": "subject" }},
-  {{ "word": "consider", "role": "verb" }},
+  {{ "word": "He", "role": "subject" }},
+  {{ "word": "is", "role": "verb" }},
+  {{ "word": "teacher", "role": "noun complement", "target": "subject" }}
+]
+
+Sentence: "They elected him president."
+
+[
+  {{ "word": "They", "role": "subject" }},
+  {{ "word": "elected", "role": "verb" }},
   {{ "word": "him", "role": "object" }},
-  {{ "word": "friend", "role": "noun complement" }}
+  {{ "word": "president", "role": "noun complement", "target": "object" }}
 ]
 
 Sentence: "{sentence}"
@@ -102,22 +112,6 @@ Sentence: "{sentence}"
     except json.JSONDecodeError:
         return []
 
-
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are an expert English grammar analyzer."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0
-    )
-
-    content = response.choices[0].message.content
-    try:
-        parsed = json.loads(content)
-        return [item for item in parsed if "word" in item and "role" in item]
-    except json.JSONDecodeError:
-        return []
 
 # 7. 심볼 적용
 def apply_symbols(parsed_result):
@@ -266,18 +260,22 @@ async def serve_openapi():
 
 # 11. 콘솔 테스트
 def parse_test(sentence: str):
-    print("\n🟦 입력 문장:", sentence)
+    print("\n==============================")
+    print("🟦 입력 문장:", sentence)
+
     store_characters(sentence)
     parsed = gpt_parse(sentence)
-    print("\n[🔍 Parsed Result]")
-    for item in parsed:
-        print(f"- {item.get('word')}: {item.get('role')}")
+
+    print("\n📊 Parsed JSON:")
+    print(json.dumps(parsed, indent=2))
+
     apply_symbols(parsed)
     connect_symbols(parsed)
-    print("\n[🖨 Diagram]")
+
+    print("\n🖨 Diagram:")
     print(print_diagrams_for_console())
-    print("\n[📦 JSON]")
-    print(json.dumps(parsed, indent=2))
+    print("==============================\n")
+
 
 if __name__ == "__main__":
     parse_test("They elected him president.")
