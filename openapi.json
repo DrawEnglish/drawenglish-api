@@ -1,50 +1,65 @@
-openapi: 3.1.0
-info:
-  title: DrawEnglish API
-  description: |
-    An API for sentence diagramming. Given an English sentence, it returns a visual representation 
-    using grammar-based symbols, aligned below each word.
-  version: 1.0.0
-
-servers:
-  - url: https://drawenglish-api.onrender.com
-
-paths:
-  /analyze:
-    post:
-      operationId: analyzeSentence
-      summary: Analyze an English sentence and return a diagram.
-      description: |
-        Accepts an English sentence and returns a diagram string using symbolic grammar annotations.
-        The response contains the original sentence and a diagramming field that uses monospaced characters
-        to visually align grammatical roles (e.g., subject, verb, object, complements, prepositions).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                sentence:
-                  type: string
-              required:
-                - sentence
-            example:
-              sentence: "They elected him president."
-      responses:
-        '200':
-          description: Diagram of the sentence
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  sentence:
-                    type: string
-                  diagramming:
-                    type: string
-              example:
-                sentence: "They elected him president."
-                diagramming: |
-                  They elected him president.
-                             ○_______□____[
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DrawEnglish API",
+    "description": "An API for sentence diagramming. Given an English sentence, it returns a visual representation using grammar-based symbols, aligned below each word.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://drawenglish-api.onrender.com"
+    }
+  ],
+  "paths": {
+    "/analyze": {
+      "post": {
+        "operationId": "analyzeSentence",
+        "summary": "Analyze an English sentence and return a diagram.",
+        "description": "Accepts an English sentence and returns a diagram string using symbolic grammar annotations. The response contains the original sentence and a diagramming field that uses monospaced characters to visually align grammatical roles (e.g., subject, verb, object, complements, prepositions).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sentence": {
+                    "type": "string"
+                  }
+                },
+                "required": ["sentence"],
+                "example": {
+                  "sentence": "They elected him president."
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Diagram of the sentence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sentence": {
+                      "type": "string"
+                    },
+                    "diagramming": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "sentence": "They elected him president.",
+                  "diagramming": "They elected him president.\n           ○_______□____["
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
