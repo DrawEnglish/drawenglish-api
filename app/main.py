@@ -56,42 +56,68 @@ Each item must have:
 - "word": the word itself
 - "role": one of:
   [subject, verb, object, subject noun complement, object noun complement, subject adjective complement, object adjective complement, preposition, conjunction]
-- (optional) "combine": only for main verbs OR prepositions. An array of objects with:
-  {{ "word": "...", "role": "..." }}
+- (optional) "combine": only for main verbs and prepositions. An array of objects with:
+  {{ "word": "..." , "role": "..." }}
 
 ---
 
 🔹 RULES:
 
-1. ✅ Use only ONE main verb per clause.
-   - If auxiliary verbs exist (e.g., "will have been eating"), only the FINAL main verb ("eating") must be labeled as `"role": "verb"`.
+1. ✅ Use only **one main verb per clause**.
+   - If auxiliary verbs exist (e.g., "will have been eating"), only the final **main verb** ("eating") is labeled `"role": "verb"`.
 
 2. ✅ Use `"combine"` only in these structures:
    - SVO → 1 object
    - SVOO → 2 objects
    - SVOC → object + complement
    - SVC → 1 subject complement
-   - ❌ SV → DO NOT use "combine" at all (even if a prepositional phrase or adverb follows)
+   - SV → ❌ do not include `"combine"` at all
 
-3. ✅ Prepositions may optionally use `"combine"` to point to their object (e.g., `"on"` → `"table"`), but verbs MUST NOT combine with prepositions.
+3. ✅ For `"combine"`, only include objects or complements **directly governed by the verb or preposition**.
+   - Never include prepositions, modifiers, or adverbs in `"combine"`.
+   - Do not include any prepositional phrase or adverbial.
 
-4. ✅ NEVER include any preposition, adverbial, or modifier in a verb’s "combine" list.
-   - Only include noun or adjective complements/objects.
-   - NEVER allow `"combine"` on intransitive verbs like "is", "seems", "arrived", etc.
+4. ✅ If the object/complement is a **phrase or clause** (e.g., to-infinitive, gerund, participial phrase, that-clause):
+   → include only the **first word** of that phrase in the `"combine"` list.
 
-5. ✅ If the object/complement is a phrase or clause:
-   → Only include the **first word** of that phrase in the "combine" list.
+5. ✅ **Prepositions** and their **objects** must be labeled separately.
+   - If the preposition governs a noun or noun phrase, it should use `"combine"` to include only the first meaningful noun.
+   - Do not include prepositions or their objects in the main verb's `"combine"`.
 
-6. ✅ Ignore function words UNLESS they serve as heads:
-   - Skip: a, an, the, my, your, his, her, its, our, their, very, really, too, quickly, etc.
+6. ❌ **Never label these function words** as `"preposition"` or `"object"`:
+   - **Articles**: a, an, the
+   - **Possessives**: my, your, his, her, its, our, their
+   - **Modifiers/Adverbs**: very, really, too, also, quickly, fast, slowly, etc.
+   → These should be ignored unless they act as main subject/object/complement.
 
-7. ✅ Conjunctions should be labeled "conjunction" but must NOT be connected via "combine".
+   👉 Especially:
+   - Words like `"fast"`, `"quickly"` must NEVER be labeled as `"object"`.
+   - If unsure, label them as `"adverb"` or omit from the JSON.
+
+7. ✅ Conjunctions (e.g., "and", "that", "because") should be labeled `"conjunction"`.
+
+8. ✅ For noun or adjective phrases like "the big red ball" or "my friend", always provide only the **head word** in `"combine"` (e.g., "ball", "friend", not "the ball" or "my friend").
+
+   👉 Examples:
+   - Instead of: {{ "word": "the race", "role": "object" }}
+     Use:        {{ "word": "race", "role": "object" }}
+
+   - Instead of: {{ "word": "my friend", "role": "subject noun complement" }}
+     Use:        {{ "word": "friend", "role": "subject noun complement" }}
+
+9. ✅ In relative clauses (e.g., "The boy who won the race..."), treat the clause as a full SVO structure.
+   - Label the verb (e.g., "won") as "verb"
+   - Label the object (e.g., "race") as "object"
+   - If the verb governs an object/complement, include a proper "combine" list as usual
+
+10. ✅ Relative pronouns (e.g., "who", "which", "that" when referring to nouns) should be labeled "relative pronoun".
+   - Do NOT label them as "conjunction".
 
 ---
 
 Sentence: "{sentence}"
 
-Return ONLY the raw JSON array. No explanation, no markdown, no extra text.
+Return ONLY the raw JSON array. Do not explain anything. Do not include any text outside the array.
 """
 
     response = client.chat.completions.create(
