@@ -29,7 +29,7 @@ role_to_symbol = {
     "conjunction": "◇"
 }
 
-# 3. 요청/응답 목록
+# 3. 요청/응답 모델
 class AnalyzeRequest(BaseModel):
     sentence: str
 
@@ -47,16 +47,16 @@ def store_characters(sentence: str):
         for m in re.finditer(r'\b\w+\b', memory["char_lower"])
     ]
 
-# 5. GPT 파시함수
+# 5. GPT 파싱 함수
 def gpt_parse(sentence: str, verbose: bool = True):
     prompt = f"""
 Analyze the following English sentence and return a JSON array.
 
 Each item must have:
-- \"word\": the word itself
-- \"role\": one of:
+- "word": the word itself
+- "role": one of:
   [subject, verb, object, subject noun complement, object noun complement, subject adjective complement, object adjective complement, preposition, conjunction]
-- (optional) \"combine\": only for main verbs and prepositions. An array of objects with:
+- (optional) "combine": only for main verbs and prepositions. An array of objects with:
   {{ "word": "..." , "role": "..." }}
 
 ---
@@ -90,7 +90,7 @@ Each item must have:
    - **Modifiers/Adverbs**: very, really, too, also, quickly, fast, slowly, etc.
    → These should be ignored unless they act as main subject/object/complement.
 
-   🔍 Especially:
+   👉 Especially:
    - Words like `"fast"`, `"quickly"` must NEVER be labeled as `"object"`.
    - If unsure, label them as `"adverb"` or omit from the JSON.
 
@@ -98,7 +98,7 @@ Each item must have:
 
 8. ✅ For noun or adjective phrases like "the big red ball" or "my friend", always provide only the **head word** in `"combine"` (e.g., "ball", "friend", not "the ball" or "my friend").
 
-   🔍 Examples:
+   👉 Examples:
    - Instead of: {{ "word": "the race", "role": "object" }}
      Use:        {{ "word": "race", "role": "object" }}
 
@@ -138,7 +138,7 @@ Return ONLY the raw JSON array. Do not explain anything. Do not include any text
         print("[RAW CONTENT]", content)  # 문제가 된 원본 그대로 출력
         return []
 
-# 6. 심볼 및 발행선 적용
+# 6. 심볼 및 밑줄 적용
 def apply_symbols(parsed):
     line = memory["char_lower"]
     symbols = memory["symbols"]
@@ -159,13 +159,13 @@ def apply_symbols(parsed):
         if symbol and idx != -1 and symbols[idx] == " ":
             symbols[idx] = symbol
 
-        # ✅ combine 처리 (단, 전치사나 접조사는 연결선 그리지 않음)
+        # ✅ combine 처리 (단, 전치사나 접속사는 연결선 그리지 않음)
         if role == "verb" and "combine" in item:
             for target in item["combine"]:
                 t_word = target["word"].lower()
                 t_role = target["role"].lower()
 
-                # ⛔ 전치사, 접조사는 연결선 제외
+                # ⛔ 전치사, 접속사는 연결선 제외
                 if t_role in ["preposition", "conjunction"]:
                     continue
 
@@ -186,7 +186,7 @@ def apply_symbols(parsed):
                     symbols[t_idx] = t_symbol
                     _connect(symbols, idx, t_idx)
 
-    # ✅ 일반적인 전치사 + 목적에 관한 구조 처리 (combine 없이 나오는 경우 대비)
+    # ✅ 일반적인 전치사 + 목적어 구조 처리 (combine 없이 나올 경우 대비)
     for i in range(len(parsed) - 1):
         cur, nxt = parsed[i], parsed[i + 1]
         if cur["role"] == "preposition" and nxt["role"] == "object":
@@ -199,6 +199,7 @@ def apply_symbols(parsed):
             if c_idx != -1 and n_idx != -1:
                 _connect(symbols, c_idx, n_idx)
 
+
 # 7. 연결 함수
 def _connect(symbols, start, end):
     if start > end:
@@ -207,23 +208,9 @@ def _connect(symbols, start, end):
         if symbols[i] == " ":
             symbols[i] = "_"
 
-# 8. Í# 8. \xcd9c력 함수
+# 8. 출력 함수
 def print_diagram():
-    diagram = diagram_filter_clean(memory["symbols"])
-    return f"\n{''.join(memory['characters'])}\n{''.join(diagram)}\n"
-
-# 8-1. 출력 복지 함수 (◇, ▽ 뒤 1칸 무시)
-def diagram_filter_clean(diagram):
-    cleaned = []
-    skip_next = False
-    for ch in diagram:
-        if skip_next:
-            skip_next = False
-            continue
-        cleaned.append(ch)
-        if ch in {'▽', '◇'}:
-            skip_next = True
-    return cleaned
+    return f"\n{''.join(memory['characters'])}\n{''.join(memory['symbols'])}\n"
 
 # 9. 디버깅용 테스트 함수
 def test(sentence: str, verbose: bool = True):
@@ -232,7 +219,7 @@ def test(sentence: str, verbose: bool = True):
         builtins.print = lambda *args, **kwargs: None
 
     print("\n==============================")
-    print("🔹 입력 문장:", sentence)
+    print("🟦 입력 문장:", sentence)
 
     store_characters(sentence)
     parsed = gpt_parse(sentence, verbose=verbose)
@@ -242,7 +229,7 @@ def test(sentence: str, verbose: bool = True):
 
     apply_symbols(parsed)
 
-    print("\n🔨 Diagram:")
+    print("\n🖨 Diagram:")
     print(print_diagram())
 
     print("\n🔢 인덱스:")
