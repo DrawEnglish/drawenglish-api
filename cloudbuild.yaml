@@ -6,14 +6,17 @@ steps:
     args: ['push', 'gcr.io/$PROJECT_ID/drawenglish-api']
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
+    entrypoint: 'gcloud'
     args:
-      - run
-      - deploy
-      - drawenglish-api
-      - --image=gcr.io/$PROJECT_ID/drawenglish-api
-      - --region=asia-northeast3
-      - --platform=managed
-      - --allow-unauthenticated
-      - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
+      - 'run'
+      - 'deploy'
+      - 'drawenglish-api'
+      - '--image=gcr.io/$PROJECT_ID/drawenglish-api'
+      - '--region=asia-northeast3'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
 
