@@ -16,3 +16,6 @@ availableSecrets:
   secretManager:
     - versionName: projects/614338445338/secrets/OPENAI_API_KEY/versions/latest
       env: 'OPENAI_API_KEY'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
