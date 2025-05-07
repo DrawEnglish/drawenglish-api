@@ -10,7 +10,7 @@ steps:
     entrypoint: gcloud
     args: ['run', 'deploy', 'drawenglish-api', '--image', 'gcr.io/$PROJECT_ID/drawenglish-api', '--region', 'us-central1', '--platform', 'managed', '--allow-unauthenticated']
     env:
-      - 'OPENAI_API_KEY=$OPENAI_API_KEY'
+      - 'OPENAI_API_KEY=OPENAI_API_KEY'  # ✅ 수정된 부분
 
 availableSecrets:
   secretManager:
