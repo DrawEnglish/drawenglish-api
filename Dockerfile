@@ -8,7 +8,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 3. .env 복사 (.gitignore에 등록된 상태면 GitHub에 푸시되지 않음)
-COPY env.prod .env
+COPY .env .env
 
 # 4. 애플리케이션 코드 복사
 COPY . .

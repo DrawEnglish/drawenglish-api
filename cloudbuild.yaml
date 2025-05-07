@@ -8,13 +8,12 @@ steps:
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
-      - 'run'
-      - 'deploy'
-      - 'drawenglish-api'
-      - '--image=gcr.io/$PROJECT_ID/drawenglish-api'
-      - '--region=asia-northeast3'
-      - '--platform=managed'
-      - '--allow-unauthenticated'
+      - run
+      - deploy
+      - drawenglish-api
+      - --image=gcr.io/$PROJECT_ID/drawenglish-api
+      - --region=asia-northeast3
+      - --platform=managed
+      - --allow-unauthenticated
+      - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
 
-images:
-  - 'gcr.io/$PROJECT_ID/drawenglish-api'
