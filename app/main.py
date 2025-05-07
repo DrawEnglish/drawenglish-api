@@ -283,3 +283,4 @@ async def analyze(request: AnalyzeRequest):
     return {"sentence": request.sentence, "diagramming": print_diagram()}
 
 #테스트
+#테스트2
