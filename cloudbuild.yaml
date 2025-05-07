@@ -1,6 +1,6 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/drawenglish-api', '.' ]
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/drawenglish-api', '.']
     secretEnv: ['OPENAI_API_KEY']
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -8,14 +8,21 @@ steps:
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
-    args: ['run', 'deploy', 'drawenglish-api', '--image', 'gcr.io/$PROJECT_ID/drawenglish-api', '--region', 'us-central1', '--platform', 'managed', '--allow-unauthenticated']
-    env:
-      - 'OPENAI_API_KEY=OPENAI_API_KEY'  # ✅ 수정된 부분
+    args:
+      - run
+      - deploy
+      - drawenglish-api
+      - --image
+      - gcr.io/$PROJECT_ID/drawenglish-api
+      - --region
+      - us-central1
+      - --platform
+      - managed
+      - --allow-unauthenticated
+      - --set-env-vars
+      - OPENAI_API_KEY=$OPENAI_API_KEY
 
 availableSecrets:
   secretManager:
     - versionName: projects/614338445338/secrets/OPENAI_API_KEY/versions/latest
       env: 'OPENAI_API_KEY'
-
-options:
-  logging: CLOUD_LOGGING_ONLY
