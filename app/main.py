@@ -282,6 +282,6 @@ async def analyze(request: AnalyzeRequest):
     apply_symbols(parsed)
     return {"sentence": request.sentence, "diagramming": print_diagram()}
 
-#테스트
-#테스트2
-#테스트3
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
