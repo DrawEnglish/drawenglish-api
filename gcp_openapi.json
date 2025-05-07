@@ -1,0 +1,58 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DrawEnglish API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://drawenglish-api-614338445338.us-central1.run.app"
+    }
+  ],
+  "paths": {
+    "/analyze": {
+      "post": {
+        "operationId": "analyzeSentence",
+        "summary": "Analyze an English sentence and return diagram",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sentence": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "sentence"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sentence": {
+                      "type": "string"
+                    },
+                    "diagramming": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
