@@ -281,3 +281,5 @@ async def analyze(request: AnalyzeRequest):
     parsed = gpt_parse(request.sentence)
     apply_symbols(parsed)
     return {"sentence": request.sentence, "diagramming": print_diagram()}
+
+#테스트
