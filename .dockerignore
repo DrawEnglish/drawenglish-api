@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 테스트
+tests/
+*.log
+
+# 에디터 관련
+.vscode/
+.idea/
+*.swp
+
+# 시스템 파일
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore

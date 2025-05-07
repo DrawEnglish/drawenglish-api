@@ -6,7 +6,12 @@ from dotenv import load_dotenv
 
 # 0. 환경 설정
 load_dotenv()
-client = OpenAI()
+
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise RuntimeError("❌ OPENAI_API_KEY is not set in environment variables.")
+client = OpenAI(api_key=api_key)
+
 app = FastAPI()
 
 # 1. 메모리 구조
@@ -276,9 +281,3 @@ async def analyze(request: AnalyzeRequest):
     parsed = gpt_parse(request.sentence)
     apply_symbols(parsed)
     return {"sentence": request.sentence, "diagramming": print_diagram()}
-
-if __name__ == "__main__":
-    test("They elected him president.")
-    test("She found the room clean.")
-    test("He said he would go.")
-    test("They will have been being called.")
