@@ -6,7 +6,7 @@
   },
   "servers": [
     {
-      "url": "https://drawenglish-api-614338445338.us-central1.run.app"
+      "url": "https://api.drawenglish.com"
     }
   ],
   "paths": {
