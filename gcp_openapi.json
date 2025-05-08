@@ -14,7 +14,7 @@
       "post": {
         "operationId": "analyzeSentence",
         "summary": "Analyze an English sentence and return diagram",
-        "x-openai-isConsequential": true,
+        "x-openai-isConsequential": false,
         "requestBody": {
           "required": true,
           "content": {
