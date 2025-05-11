@@ -1,3 +1,9 @@
+◎ Google Cloud Run 관련 주요 링크
+- 프로젝트 ID 리스트 : https://console.cloud.google.com/projectselector2/home/dashboard
+- 내 결재계정(billing Account) 설정 : https://console.cloud.google.com/billing
+
+
+
 ■ Dockerfile 작성
 ------------------
 루트 폴더로 이동
@@ -9,20 +15,17 @@ cd C:/drawenglish-api
 
 FROM python:3.11-slim
 
+# 1. 작업 디렉토리 설정
 WORKDIR /code
 
+# 2. 의존성 설치
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# .env 파일 복사 (이미 하고 있었을 것)
-COPY .env .env
-
-# 👇 이 줄을 추가!
-# .env의 내용을 실제 환경 변수로 등록
-RUN export $(cat .env | xargs)
-
+# 4. 애플리케이션 코드 복사
 COPY . .
 
+# 5. FastAPI 실행
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 -----------
@@ -70,24 +73,33 @@ https://cloud.google.com/sdk/docs/install
 - "PATH에 추가" 체크
 - "gcloud CLI 시작 시 자동 업데이트 허용" 선택 가능
 
+☞ 처음 설치하여 Project ID가 없을때
 Pick cloud project to use:
  [1] serenamarang-4552O2-s5
  [2] Enter a project ID
  [3] Create a new project
-☞ 3번 선택
 
-프로젝트 이름 입력 : drawenglish-api
+☞ Project ID drawenglish-api를 이미 만들었을 때
+Pick cloud project to use:
+ [1] drawenglish-api
+ [2] serene-anagram-455202-s5
+ [3] Enter a project ID
+ [4] Create a new project
+Please enter numeric choice or text value (must exactly match list item):
+
+
+[3] 선택 후 프로젝트 이름 입력 : drawenglish-api
 또는 
-명령창에서 : gcloud projects create drawenglish-api
+빠져나온 후 명령창에서 : gcloud projects create drawenglish-api
 
-생성되면 아래 명령어로 선택:
+생성되면 아래 명령어로 Project ID 선택:
 gcloud config set project drawenglish-api
 
 프로젝트 설정 끝나면 다음 단계:
 gcloud services enable run.googleapis.com
 → 이 명령은 Cloud Run 기능을 활성화하는 거야 (필수)
 
-GCP 프로젝트는 생성됐지만 결제 계정(Billing Account)이 연결되지 않으면
+☞ GCP 프로젝트는 생성됐지만 결제 계정(Billing Account)이 연결되지 않으면
 Cloud Run을 쓸 수 없음.(아래 메시지 출력됨)
 -----------
 C:\Program Files (x86)\Google\Cloud SDK>gcloud services enable run.googleapis.com
@@ -153,6 +165,11 @@ cd C:/drawenglish-api
 아래 명령어 실행
 gcloud run deploy drawenglish-api --source . --region asia-northeast3 --platform managed --allow-unauthenticated
 
+drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔도 돼)
+--source .: 현재 디렉토리에 있는 Dockerfile 기준으로 빌드
+--region asia-northeast3: 서울 리전
+--allow-unauthenticated: 외부 공개 API로 만들기 (GPT에서 접근 가능하게)
+
 ※ 아래와 같은 코드 있으면 배포 안됨 ???
 # 🚫 이 부분 주석처리 또는 삭제
 # if __name__ == "__main__":
@@ -163,6 +180,38 @@ gcloud run deploy drawenglish-api --source . --region asia-northeast3 --platform
 
 
 ==================================================================
+
+
+
+
+
+■■■ GPTs가 외부 API를 이용할때 접근 '허용'을 매번 물어보는거 없애는 방법
+
+■ 신뢰된 도메인으로 미리 등록하기 (GPT 개발자 대상) / 이건 되는지 확인 안됨.
+- openapi.yaml[json]에 사용하는 서버 URL이 HTTPS여야 함 (예: https://yourapi.com)
+- API 서버의 CORS 정책이 설정되어 있어야 함
+- OpenAI 측에서 내부적으로 자동 허용 가능한 도메인 리스트에 올라 있어야 함 (대부분의 상용 도메인은 가능)
+
+
+
+
+
+
+
+
+
+
+
+GPTs가 외부 API를 이용할때 접근 '허용'을 매번 물어보는거 없애는 방법
+
+출력결과 이탤릭으로 나오는거
+
+
+
+
+
+
+
 
 
 
