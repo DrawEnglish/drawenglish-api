@@ -100,8 +100,10 @@ async def analyze(request: AnalyzeRequest):
 
 ※ uvicorn app.main:app --host 0.0.0.0 --port 10000
    위명령은 운영환경, 성능좋음, 코드 수정시 서버 자동 재시작 X
+
    uvicorn app.main:app --reload
    위 명령은 개발환경, 코드수정 서버 자동재시작, 디버깅과 빠른 데스트, 성능 떨어짐
+
  * IP 0.0.0.0은 모든 IP에서 접근 가능, IP생략하면 127.0.0.1(로컬만 접근가능)로 기본 설정
    포트는 명시가능, 명시안하면 기본값 8000 사용
  * .env파일에 API Key 입력 안되어 있으면 구동 안됨.
