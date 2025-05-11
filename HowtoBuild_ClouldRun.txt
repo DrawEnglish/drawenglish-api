@@ -155,7 +155,7 @@ gcloud services enable run.googleapis.com
 ☞ Operation "operations/acf.p2-614338445338-d855f9d9-8230-4e11-bf1b-dd6eeb8977f6" finished successfully. 나오면 성공
 
 
-■ 배포 명령어 - 로컬 PC에서 
+■ 배포 - 로컬 PC에서 
 -----------------------------
 
 프로젝트 폴더로 이동해서
@@ -198,7 +198,7 @@ gcloud run services update drawenglish-api --update-env-vars OPENAI_API_KEY=sk-x
 
 
 
-■ 배포 명령어 - GitHub를 통해 
+■ 배포 - GitHub를 통해 
 -------------------------------
 ◎ GitHub → Cloud Run 배포 기본 흐름
 1) GitHub에 프로젝트 업로드
@@ -224,6 +224,75 @@ git push -u origin main
 ▷ GCP에서 Cloud Build 연동(트리거 설정)
 Google Cloud Console → Cloud Build > 트리거 접속(아래 링크)
 https://console.cloud.google.com/cloud-build/triggers
+
+▷ 트리거 만들기 
+이름: github-auto-deploy
+리전 : us-central1(아이오와) 선택
+이벤트: 브랜치로 푸시 / "푸시될 때" (push to branch)
+소스 저장소 생성 : 1세대
+소스 저장소: drawenglish/drawenglish-api 선택 (GitHub 선택 후 GitHub 계정 연결)
+브랜치: main
+구성 - 유형: Cloud Build 구성 파일(yaml 또는 json) 선택
+위치 - 저장소: DrawEnglish/drawenglish-api (GitHub 앱) / 루트 디렉터리 (cloudbuild.yaml 파일이 필요)
+ * Cloud Build 구성 파일 위치 : /cloudbuild.yaml
+   (Git 저장소 내의 Cloud Build 구성 파일 경로를 지정)
+GitHub에 빌드 로그 전송 체크 ???
+서비스 계정 : 614338445338-compute@developer.gserviceaccount.com 선택
+
+▷ cloudbuild.yaml 파일 만들기
+프로젝트 루트에 cloudbuild.yaml 파일을 아래 내용으로 생성
+-----------------------------------------------------------------------
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/drawenglish-api', '.']
+    secretEnv: ['OPENAI_API_KEY']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/drawenglish-api']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - drawenglish-api
+      - --image
+      - gcr.io/$PROJECT_ID/drawenglish-api
+      - --region
+      - us-central1
+      - --platform
+      - managed
+      - --allow-unauthenticated
+      - --set-env-vars
+      - OPENAI_API_KEY=OPENAI_API_KEY  # 이 줄은 .env 안 쓰는 방식
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/614338445338/secrets/OPENAI_API_KEY/versions/latest
+      env: 'OPENAI_API_KEY'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+
+timeout: 600s  # 지정하지 않을때의 기본값이 600초임
+-----------------------------------------------------------------------
+
+▷ 배포 테스트
+git add cloudbuild.yaml
+git commit -m "add cloudbuild.yaml for auto deployment"
+git push
+☞ 푸시하면 Cloud Build 트리거가 작동하면서 자동으로 Cloud Run에 배포됩니다!
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -308,620 +377,5 @@ GPTs가 외부 API를 이용할때 접근 '허용'을 매번 물어보는거 없
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-FastAPI + GitHub + Render로 DrawEnglish API 다시 구축
-
-<목표>
-- 문장을 분석하는 POST /analyze API 만들기
-- GitHub에 코드 올리고
-- Render에 배포해서
-- Custom GPT에 OpenAPI 연결
-
-1. 로컬에서 FastAPI 프로젝트 만들기
-
-- 기본 폴더 구조
-drawenglish-api/
-├── app/
-│   └── main.py          👈 FastAPI 앱
-├── openapi.json         👈 GPT용 API 스펙
-├── README.md
-├── requirements.txt     👈 의존성 (FastAPI, Uvicorn 등)
-
-2. FastAPI 코드(app/main.py)
-
-3. OpenAPI 코드 (openapi.json)
-👉 배포 후 RENDER_URL 자리에 실제 Render 주소 넣어줘야 해
-
-4. requirements.txt
-fastapi
-uvicorn
-
-5. GitHub에 업로드
-1. 로컬 폴더 만든 후 위 파일 구성
-2. GitHub 레포지토리 생성 (예 : drawenglish-api)
-3. 다음 명령어
-
-git init
-git remote add origin https://github.com/drawenglish/drawenglish-api.git
-git add .
-git commit -m "Initial commit"
-git push -u origin main
-
-6. Render에 배포
-1. https://render.com → 새 Web Service 생성
-2. GitHub 연동 후 drawenglish-api 선택
-3. 환경설정
-  - Start command: uvicorn app.main:app --host 0.0.0.0 --port 10000
-  - Python build 자동 인식됨
-  - 포트 설정 자동 처리됨
-
-✅ 최종 테스트
-배포가 완료되면:
-https://drawenglish-api.onrender.com/analyze 에 POST 요청 테스트
-openapi.json도 GET /openapi.json에 서빙해도 좋음 (필요하면 코드 추가해줄게!)
-
-================================================================
-
-■■■ 1. 로컬에서 FastAPI 프로젝트 만들기
-
-C:\drawenglish-api 폴더 생성
-C:\drawenglish-api 폴더로 이동
-
-가상환경 만들고 활성화
-python -m venv venv  → venv 폴더 생김 ?
-venv\Scripts\activate → (venv) C:\drawenglish-api> 로 프롬프트 바뀜
-
-필요한 패키지 설치
-pip install fastapi uvicorn ← Fastapi 패키지 설치
-
-*fastapi : API를 만들 수 있게 해주는 Python 웹 프레임워크(설계도구)
- 식당을 설계하고 요리 메뉴를 짜는 것(어떤 API를 만들지 코딩하는 역할)
-*uvicorn : FastAPI 서버를 실제로 돌려주는 초경량 ASGI 서버(실제로 띄워주는 엔진)
- 식당에서 요리를 실제로 제공하는 것(서버를 켜고 요청을 받아 응답하는 역할)
-
-
-FastAPI 앱 만들기
-type nul > app\main.py
-또는 메모장에서 열기
-notepad app\main.py
-아래 소스 입력 후 저장
-
-from fastapi import FastAPI
-from pydantic import BaseModel
-
-app = FastAPI()
-
-class AnalyzeRequest(BaseModel):
-    sentence: str
-
-class AnalyzeResponse(BaseModel):
-    sentence: str
-    diagramming: str
-
-@app.post("/analyze", response_model=AnalyzeResponse)
-async def analyze(request: AnalyzeRequest):
-    sentence = request.sentence
-    diagram = f"DrawEnglish diagram for: '{sentence}'"
-    return {"sentence": sentence, "diagramming": diagram}
-
-
-★★★ uvicorn app.main:app --reload
-위 명령으로 실행해 보기 : app 폴더 생김?
-
-★★★ 브라우저에서: http://127.0.0.1:8000/docs
-→ 자동으로 Swagger UI 뜨고 /analyze 테스트할 수 있어!
-※GitHub, Render쪽 아무 작업 없이 웹페이지 생성된 것임.
-
-
-■■■ 2. GitHub에 코드 올리기
-
-git init 기트 초기화
- .git 폴더 생김 : Initialized empty Git repository in C:/drawenglish-api/.git/
-
-git add . 전체파일 Git에 추가 .은 폴더 안 모든 파일 추가하는 명령
-
-git branch  기트 브랜치 이름 확인 : main 이어야 함(요즘은 main은 쓴다고 함)
-  (no branch) 또는 master라고 나올 수 있음.
-
-git branch -M main  브랜치 만들기(또는 이름 바꾸기) / -M 옵션은 '이름 강제 변경'
-
-git commit -m "Initial commit for DrawEnglish API" 커밋하기(변경사항 저장)
-  -m옵션은 메시지
-
-GitHub에 새 레포지토리 만들기
-  https://github.com 접속
-  오른쪽 위 + 버튼 → New repository
-  Repository 이름은 예를 들면 drawenglish-api
-  비공개(private) / 공개(public) 선택은 자유
-  README 파일 추가하지 마! (충돌나니까)
-☞ GitHub (레포) 주소 생성 : https://github.com/drawenglish/drawenglish-api.git
-
-
-GitHub 원격 저장소 연결
-git remote add origin https://github.com/drawenglish/drawenglish-api.git
-
-
-GitHub Pages 설정
-GitHub에서 drawenglish-api 레포 열고 오른쪽 위 Settings 탭 클릭 - 
-왼쪽 사이드바에서 Pages 클릭
-- Source: Deploy from a branch
-- Branch: main
-- Folder: / (root)
-Save해서 저장
-
-
-GitHub에 Push(올리기) : 에러가 나 강제로 올릴때는 -f 옵션 사용(하지만 주의)
-★ git push -u origin main
-☞ GitHub에 코드가 올라감 : .git, venv 폴더는 안올라감.
-   : 로컬에 있는 /app폴더/__pycache__폴더, main.py가 그대로 올라감
-
-requirements.txt 만들기
-pip freeze > requirements.txt  → 로컬에 파일 만들어지고 아래 것들이 입력됨
-  annotated-types==0.7.0          (현재 로컬PC에 설치된 요소들이 저장됨)
-  anyio==4.9.0
-  click==8.1.8
-  colorama==0.4.6
-  fastapi==0.115.12
-  h11==0.16.0
-  idna==3.10
-  pydantic==2.11.4
-  pydantic_core==2.33.2
-  sniffio==1.3.1
-  starlette==0.46.2
-  typing-inspection==0.4.0
-  typing_extensions==4.13.2
-  uvicorn==0.34.2
-
-pip install -r requirements.txt
-  이 명령을 로컬에서 실행하면 requirements.txt에 입력된 구성요소들이 로컬에 설치됨
-  이 파일을 github에 저장해 놓으면 render 같은 서버환경에 파이썬 패키지들을 설치하는 것임
-
-※ git push는 "커밋된 변경사항"만 올려. 먼저 push할 파일을 add하고 commit해야 함.
-git add requirements.txt
-git commit -m "Add requirements.txt"
-
-★ git push -u origin main
-☞ GitHub에 add, commit한 requirements.txt가 올라감
-
-
-
-■■■ Render에 배포하기
-
-1. https://render.com 접속 → 로그인
-(처음이라면 GitHub 연동도 할 수 있어)
-2. 상단 메뉴 → New → Web Service 선택
-3. 배포 설정
-이름 : drawenglish-api (원하는 이름 가능)
-GitHub 리포지토리 : drawenglish-api 선택
-Branch : main
-Build Command : pip install -r requirements.txt 이 자동으로 채워짐 (비워도 됨)
-Start Command : uvicorn app.main:app --host 0.0.0.0 --port 10000
-환경 : Python
-plan 선택
-
-Deploy 실행
-
-배포가 완료되면 →
-Live URL이 생성돼! ( https://drawenglish-api.onrender.com )
- ☞ 이걸 우리가 openapi.json에 넣고, GPTs에서도 연결하게 될 거야.
- ※브라우저에서 접속보면 200 OK 또는 {"detail":"Not Found"} 나올 수도 있어 → 괜찮아!
-★★ https://drawenglish-api.onrender.com/docs 접속하면 Swagger UI 열림
-     : analyze 테스트 해보면 됨.
-
-
-■■■  openapi.json 만들어서 GPTs 연결
-GPTs에 붙일 수 있게 OpenAPI 스펙(openapi.json) 파일을 만들어서
-→ Render 서버의 /openapi.json 경로에 노출시키는 과정
-
-openapi.json 파일 만들어 아래 소스를 입력한다.
-
-{
-  "openapi": "3.1.0",
-  "info": {
-    "title": "DrawEnglish API",
-    "version": "1.0.0"
-  },
-  "servers": [
-    {
-      "url": "https://drawenglish-api.onrender.com"
-    }
-  ],
-  "paths": {
-    "/analyze": {
-      "post": {
-        "operationId": "analyzeSentence",
-        "summary": "Analyze an English sentence",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "sentence": {
-                    "type": "string"
-                  }
-                },
-                "required": ["sentence"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "sentence": { "type": "string" },
-                    "diagramming": { "type": "string" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-
-astAPI에서 /openapi.json 엔드포인트 추가 (/openapi.json FastAPI에서 서빙)
-무슨 말이냐면 넌 지금 GitHub에만 올려놨고,
-Render 서버에서는 /openapi.json 주소가 아직 응답 안 될 거야.
-👉 그래서 FastAPI 코드(app/main.py)에 이 한 줄 추가만 하면 돼:
-
-from fastapi.responses import FileResponse
-import os
-
-@app.get("/openapi.json", include_in_schema=False)
-async def serve_openapi():
-    file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
-    return FileResponse(file_path, media_type="application/json")
-
-
-GitHub에 변경사항 푸시
-git add .
-git commit -m "Add openapi.json and expose via /openapi.json"
-git push -u origin main
-
-GitHub 푸시되면 Render가 자동으로 새로 배포해줌
-
-배포후 확인
-https://drawenglish-api.onrender.com/openapi.json 접속해 JSON 스펙이 보이면 OK!
-그럼 GPTs에서 “외부 API 연결”로 붙일 수 있어
-
-
-※ 참고사항 : 로컬폴더와 Git 원격 주소 연결 확인
-(venv) C:\drawenglish-api>git remote -v
-origin  https://github.com/drawenglish/drawenglish-api.git (fetch)
-origin  https://github.com/drawenglish/drawenglish-api.git (push)
-
-만약 drawenglish-api-v2.git 같이 맞지않는 주소가 나오면 새 레포 주소로 바꿔줘야 해:
-git remote set-url origin https://github.com/drawenglish/drawenglish-api.git
-
-
-
-■■■  openapi.json을 GPTs 연결
-
-먼저 https://drawenglish-api.onrender.com/openapi.json을 열어본다.
-내용으로 보여주는 건 FastAPI가 자동 생성한 OpenAPI 스펙 JSON임.
-왜 이렇게 보여 주냐면?
-FastAPI는 기본적으로 자체 OpenAPI 문서를 가지고 있고,
-아무 설정 없이 /openapi.json을 요청하면 자동으로 내부 스펙을 보여줘.
-그래서 너가 만든 openapi.json 파일을 보여주는 게 아니라
-FastAPI가 내부에서 자동 생성한 스펙을 보여주고 있어.
-☞ 실제 openapi.json파일에 입력된 내용을 보여주는 것이 아니라는 얘기임.
-   그래서 "servers": [ 관련 내용이 웹페이지에도 가져오기 결과에도 안보느는 것임
-
-GPTs에서 스키마 URL에서 가져오기에 이래 주소 입력 후 가져오기
-https://drawenglish-api.onrender.com/openapi.json
-
-☞ 위의 이유로 GPTs에서 URL에서 가져오기하면 
-   Could not find a valid URL in servers 에러가 발생할 수 있음.
-
-그래서 우리가 만든 커스텀 openapi.json으로 GPTs와 연결하고 싶다면?
-우리가 만든 JSON 파일 (C:\drawenglish-api\openapi.json)이 GPTs와 연동되도록 하려면,
-FastAPI 코드에서 명확히 외부 JSON 파일을 응답하도록 수정해야 해.
-
-main.py의 내용에서 openapi.json을 custom-openapi.json 으로 수정함.
-@app.get("/custom-openapi.json", include_in_schema=False)
-
-GitHub Commit하고 Push → Render Deploying
-☞ server 부분 확실히 있음
-
-GPTs에서 스키마 URL에서 가져오기에 아래 주소 입력 후 가져오기
-https://drawenglish-api.onrender.com/custom-openapi.json
-☞ 성공함!!!
-
-
-GPTs 링크 공유하기
-우측상단 '공유하기' - '링크가 있는 모든 사람' 선택 - '저장'
-- 공유 링크를 복사할 수 있음
-  예) https://chatgpt.com/g/g-6810dd0c0df48191afb83d3bb158e20a-draw-english-sentence-diagramming
-
-
-■ GPTs에 개인정보보호정책 설정(privacy.html 연결)
-
-c:\drawenglish-api 폴더에 privacy.html 만들고 아래 소스 입력
-<!-- privacy.html -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Privacy Policy</title>
-</head>
-<body>
-  <h1>Privacy Policy</h1>
-  <p>This service does not collect or store any personal data.</p>
-  <p>All user inputs are processed in real-time and are not saved.</p>
-</body>
-</html>
-☞ 저장하고 커밋 후 푸시
-
-
-
-■■■  DrawEnglish 엔진(Fast API?) + OpenAI GPT-4 API에 지침(prompt) 지침 연동
-
-✅ OpenAI API 키 필요 (네가 이미 있다고 했지!)
-✅ Python 라이브러리 openai 설치 필요
-pip install openai
-✅ 네 OpenAI API 키를 서버에 설정 (Tip: .env 파일로 숨겨두는 걸 추천해!)
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
-
-
-■ API 키관리
-
-1) 로컬을 위한 세팅
-c:\drawenglish-api 폴더에 .env 파일 생성 아래 입력하고 저장
-OPENAI_API_KEY=키값
- ※.env는 절대 GitHub에 업로드 하면 안됨(하려고 해도 경고/에러 메시지 남)
-c:\drawenglish-api 폴더에 .gitignore 파일 생성하고 아래 입력하고 저장
-.env
-__pycache__/
-*.pyc
- ※ 이로인해 .env가 업로드 되는 것을 방지한다.
-
-2) Render에 OpenAI 키 등록하기(Render에서 환경변수 설정)
-Render에 로그인 후 배포한 서비스(Project) 선택(예: drawenglish-api)
-상단 탭에서 “Environment” 또는 “Environment Variables” 클릭
-Key에 → OPENAI_API_KEY
-Value에 → sk-xxxxxxxxxxxxxx 키 값 입력
-저장 (자동 적용됨)
- ※ 그럼 서버가 재시작될 때 이 환경변수가 자동으로 적용돼!
-
-
-■ main.py에 필요한 소스 입력
-
-#아래 2줄은 FastAPI에서 /openapi.json 엔드포인트 추가하기 위한 부분
-from fastapi.responses import FileResponse
-import os
-
-#아래 4줄은 openai GPT 호출과 환경변수 로딩을 가능하게 하기 위한 부분
-import openai
-from dotenv import load_dotenv
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
-#아래는 함수는 FastAPI에서 /openapi.json 엔드포인트 추가하기 위한 부분
-@app.get("/custom-openapi.json", include_in_schema=False)
-async def serve_openapi():
-    file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
-    return FileResponse(file_path, media_type="application/json")
-
-☞ 위의 dotenv 관련 설정이 작동되기 위해 python-dotenv를 설치해야함.
-pip install python-dotenv
-
-
-
-
-
-
-
-
-
-
-
-다른 PC에서 개발환경을 구축(동기화)하고자 할때
-----------------------------------------------
-
-1.PC에서 기존 C:\drawenglish-api 폴더 정리
-먼저 깨끗하게 시작할 거야.
-만약 C:\drawenglish-api 폴더 안에 의미 없는 파일(비어있거나 쓰다만 거) 있다면
-그 폴더를 통째로 삭제해줘.
-(또는 이름 바꿔도 됨: 예 drawenglish-api-old 이런 식으로.)
-
-C:\drawenglish-api (❌ 삭제 또는 폴더명 변경)
-
-2. 새로 GitHub에서 프로젝트 복제 (clone)
-아예 처음부터 GitHub에서 최신 파일을 가져오자!
-터미널(cmd) 또는 Git Bash 열고:
-
-cd C:\
-git clone https://github.com/DrawEnglish/drawenglish-api.git
-
-이 명령어 입력하면:
-C:\drawenglish-api\ 폴더가 자동으로 만들어지고
-GitHub에 있던 최신 코드가 다 내려와!
-✅ 여기에는 app/main.py, openapi.json, .git 폴더까지 다 들어올 거야.
-
-3. 내려왔는지 확인
-
-cd drawenglish-api
-dir
-
-(또는 윈도우 탐색기로 C:\drawenglish-api 폴더 열어봐.)
-app/
-openapi.json
-requirements.txt (있다면)
-.git (숨김 파일)
-이런 파일/폴더가 보이면 성공이야! ✨
-
-4. 가상환경(venv) 다시 세팅 (선택)
-만약 새로운 컴퓨터 환경이라면:
-python -m venv venv
-.\venv\Scripts\activate
-
-pip install fastapi uvicorn  #필수 패키지 설치
-📦 FastAPI 서버를 로컬에서 돌리고 싶을 때 설치해야 함.
-
-또는 
-pip install -r requirements.txt 명령으로 일괄? 설치
-
-로컬 서버 실행
-uvicorn app.main:app --reload
-http://127.0.0.1:8000/docs 웹페이지 열림
-
-
-5. 뭔가 작업 후엔 반드시 커밋 + 푸시
-git add .
-git commit -m "Update diagram logic"
-git push origin main
-
-
-※ drawenglish-api 폴더 자체를 통채로 압축해서 복사하는 방식으로 개발환경 구축 할때는
-   'venv' 폴더는 제외해야 하고, 아래 명령으로 새로 만드는게 안전
-   (OS 차이로 문제 발생 할 수 있음)
-
-   cd drawenglish-api
-   python -m venv venv
-   venv\Scripts\activate
-   pip install fastapi uvicorn  또는  pip install -r requirements.txt
-   uvicorn app.main:app --reload
-
-
-■■■ Python 콘솔에서 소스 테스트 하고 싶을때
-
-
-■ cmd창에서 직접 실행
-(venv) C:\drawenglish-api> python app/main.py
-
-또는 Python 콘솔로 진입해서하는 방법
-cd c:\drawenglish-api\app   #app폴더로 이동해야함.
-python
->>> from main import print_parsed_roles
-
-또는 별도의 py로 만들었을 경우
-from test_tools import print_parsed_roles
-
-print_parsed_roles("She loves music.")
-
-
-■ GPT 파싱결과와 문장도식 결과 확인
-
-(venv) C:\drawenglish-api> python
-
-from app.main import store_characters, gpt_parse, apply_symbols, print_diagrams
-
-sentence = "The weather is beautiful"
-store_characters(sentence)
-parsed = gpt_parse(sentence)
-apply_symbols(parsed)
-print(generate_diagram())
-print(parsed)
-또는 
-import json
-print(json.dumps(parsed, indent=2))
-
-
-위 과정을 통합 함수로 이용하는 방법
-(venv) C:\drawenglish-api> python
-from app.main import store_characters, gpt_parse, apply_symbols, print_diagrams, parse_test
-
----------------------이건 함수-------------------------
-def test(sentence: str):
-    print("\n🟦 입력 문장:", sentence)
-    store_characters(sentence)
-    parsed = gpt_parse(sentence)
-    print("\n[🔍 Parsed Result]")
-    for item in parsed:
-        word = item.get("word", "")
-        role = item.get("role", "")
-        print(f"- {word}: {role}")
-    apply_symbols(parsed)
-    print("\n[🖨 Diagram]")
-    print(generate_diagram())
-    return parsed  # 원하면 외부에서 쓸 수 있도록 반환
--------------------------------------------------------
-
-아래 명령으로 이용
-from app.main import parse_test
-parse_test("I give him a book.")
-
-
-
-■작업 전 조치사항
-----------------
-
-cd c:\drawenglish-api
-
-python -m venv venv
-venv\Scripts\activate
-
-git add .
-git commit -m "Update DrawEnglish-API"
-git push origin main
-
-pip freeze > requirements.txt
-
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-
-
-
-■ Python 파일 수정후 다시 로드하는 방법
-
-1. 빠져나갔다가 다시 로드
->>> exit()
-(venv) C:\your_project> python
->>> from app import main
-
-2. importlib.reload() 사용
->>> import importlib
->>> import app.main
->>> importlib.reload(app.main)
-
-
-
-
-
-기타 참고사항
--------------
-
-main.py와 openapi.json은 맞추어서 수정해 주어야 한다.
-
-Python 코드 작업을 수월하게 하고 싶다면 VS Code 설치
-
-
-
-
-
-■ 전체 캐시 + 쿠키 삭제
-
-Ctrl + Shift + Delete  # 대화창의 전체 대화 삭제됨
-
-chrome://settings/clearBrowserData
-
-F5(새로고침),  Ctrl + F5 (강력 새로고침 / 캐시 무시하고 다시 받아옴)
-
-※ 쿠키를 지우면 GPTs나 로그인된 서비스에서 로그아웃될 수 있어
-※ 캐시만 지우면 대개 로그인 유지됨 (안전함)
 
 
