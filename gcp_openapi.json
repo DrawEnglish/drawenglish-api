@@ -2,6 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "DrawEnglish API",
+    "description": "An API for sentence diagramming. Given an English sentence, it returns a visual representation using grammar-based symbols, aligned below each word.",
     "version": "1.0.0"
   },
   "servers": [
@@ -13,8 +14,9 @@
     "/analyze": {
       "post": {
         "operationId": "analyzeSentence",
-        "summary": "Analyze an English sentence and return diagram",
+        "summary": "Analyze an English sentence and return diagram.",
         "x-openai-isConsequential": false,
+        "description": "Accepts an English sentence and returns a diagram string using symbolic grammar annotations. The response contains the original sentence and a diagramming field that uses monospaced characters to visually align grammatical roles (e.g., subject, verb, object, complements, prepositions).",        
         "requestBody": {
           "required": true,
           "content": {
@@ -26,9 +28,10 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "sentence"
-                ]
+                "required": ["sentence"],
+                "example": {
+                  "sentence": "They elected him president."
+                }
               }
             }
           }
@@ -48,6 +51,10 @@
                       "type": "string"
                     }
                   }
+                },
+                "example": {
+                  "sentence": "They elected him president.",
+                  "diagramming": "They elected him president.\n           ○_______□____["
                 }
               }
             }

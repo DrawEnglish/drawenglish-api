@@ -429,7 +429,7 @@ C:\drawenglish-api (❌ 삭제 또는 폴더명 변경)
 아예 처음부터 GitHub에서 최신 파일을 가져오자!
 터미널(cmd) 또는 Git Bash 열고:
 
-cd C:\
+cd c:\drawenglish-api
 git clone https://github.com/DrawEnglish/drawenglish-api.git
 
 이 명령어 입력하면:

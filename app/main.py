@@ -1,7 +1,8 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-from openai import OpenAI
 import os, json, re
+from fastapi import FastAPI  # FastAPI는 Python 기반의 웹 프레임워크로, Re=EST API를 만들때 매우 간단하고 빠름
+from pydantic import BaseModel  # BaseModeld=은 FastAPI에서 request/response의 데이터 검증과 자동 문서화를 위해 사용되는 클래스(Pydantic제공)
+# 아래 api_key= 까지는 .env 파일에서 OpenAI키를 불러와 설정하는 부분 
+from openai import OpenAI
 from dotenv import load_dotenv
 
 # 0. 환경 설정
@@ -12,7 +13,7 @@ if not api_key:
     raise RuntimeError("❌ OPENAI_API_KEY is not set in environment variables.")
 client = OpenAI(api_key=api_key)
 
-app = FastAPI()
+app = FastAPI()  # FastAPI() 객체를 생성해서 이후 라우팅에 사용
 
 # 1. 메모리 구조
 memory = {
@@ -35,10 +36,10 @@ role_to_symbol = {
 }
 
 # 3. 요청/응답 목록
-class AnalyzeRequest(BaseModel):
+class AnalyzeRequest(BaseModel):  # 사용자가 보낼 요청(sentence) 정의
     sentence: str
 
-class AnalyzeResponse(BaseModel):
+class AnalyzeResponse(BaseModel):  # 응답으로 돌려줄 데이터(sentence, diagramming) 정의
     sentence: str
     diagramming: str
 
@@ -274,13 +275,20 @@ __all__ = [
     "test"
 ]
 
-# 11. API 엔드포인트
-@app.post("/analyze", response_model=AnalyzeResponse)
+# 11. 분석 API 엔드포인트
+@app.post("/analyze", response_model=AnalyzeResponse)  # 문장을 받아서 그에 대한 "문장 구조도(다이어그램)"를 응답으로 리턴
 async def analyze(request: AnalyzeRequest):
     store_characters(request.sentence)
     parsed = gpt_parse(request.sentence)
     apply_symbols(parsed)
     return {"sentence": request.sentence, "diagramming": print_diagram()}
+
+# 12. 커스텀 OpenAPI JSON 제공 엔드포인트
+# FastAPI에서 custom-openapi.json 엔드포인트를 만들어서 GPTs에서 사용할 수 있도록 함.
+@app.get("/custom-openapi.json", include_in_schema=False)
+async def serve_openapi():
+    file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
+    return FileResponse(file_path, media_type="application/json")
 
 if __name__ == "__main__":
     import uvicorn

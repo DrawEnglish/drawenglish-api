@@ -14,7 +14,7 @@
     "/analyze": {
       "post": {
         "operationId": "analyzeSentence",
-        "summary": "Analyze an English sentence and return a diagram.",
+        "summary": "Analyze an English sentence and return diagram.",
         "x-openai-isConsequential": false,
         "description": "Accepts an English sentence and returns a diagram string using symbolic grammar annotations. The response contains the original sentence and a diagramming field that uses monospaced characters to visually align grammatical roles (e.g., subject, verb, object, complements, prepositions).",
         "requestBody": {
@@ -38,7 +38,7 @@
         },
         "responses": {
           "200": {
-            "description": "Diagram of the sentence",
+            "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
