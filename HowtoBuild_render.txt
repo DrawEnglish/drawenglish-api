@@ -639,31 +639,17 @@ Git reflog 제거 및 압축
 git reflog expire --expire=now --all
 git gc --prune=now --aggressive
 
+강제 푸시
+git push --force
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+■ Java JDK 설치
+-----------------------------------------
+https://www.oracle.com/java/technologies/javase-downloads.html
+또는
+https://adoptium.net/ (Eclipse Temurin — 가볍고 오픈소스)
+- 설치 시 PATH에 추가하는 옵션 반드시 체크
+- java -version 명령으로 설치 버전 확인
 
 
 
