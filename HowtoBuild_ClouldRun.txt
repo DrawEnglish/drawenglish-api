@@ -324,7 +324,24 @@ https://console.cloud.google.com/cloud-build/builds 를 통해 성공 여부 및
  - 자동 빌드가 가능한 트리거 리전 : global 또는 us-central1로 설정
 
 
+▷ 배포 지점(서버) 확인
+----------------------------------
+1) CLI 명령
+
+-gcloud CLI에서 gcloud run services list만으로 확인
+gcloud run services list --platform=managed 또는 그냥 gcloud run services list
+
+-JSON으로 정확한 정보 확인
+gcloud run services list --platform=managed --format=json
+
+2) 웹콘솔
+https://console.cloud.google.com/run → 서비스 에서 확인 가능
+ * 리스트가 아주 많은 경우 필터 설정 가능 : 예) 필터 : 리전 asia-northeast3
+
+
+
 ▷ 주의: "IAM Policy failed" 경고
+-----------------------------------
 Cloud Run을 **공개 URL로 접근 가능하게 만드는 권한 설정(roles/run.invoker)**이 실패했습니다.
 따라서 지금은 외부 사용자가 이 URL에 접근할 수 없을 가능성이 높습니다 (403 에러 날 수 있어요)
 다음 명령어를 실행하면 Cloud Run을 공개로 전환할 수 있습니다:
@@ -342,6 +359,16 @@ bindings:
   role: roles/run.invoker
 etag: BwY03WcCUT0=
 version: 1
+
+
+
+
+
+▷ 글로벌 사용자 대응(배포 서버를 여러개로 서비스)이 필요하면 <<<< 차후 정리할 것 >>>
+GCP의 Cloud Load Balancer + 멀티 리전 Cloud Run이 가장 실전적이고 효과적인 방법입니다.
+사용자는 어디에서 오든 가장 가까운 서버로 자동 연결됩니다.
+참고: Cloud Run 자체는 리전별로 분리된 단일 서비스입니다
+즉, Cloud Run에는 멀티 리전 자동 분산 기능은 없고, 외부에서 분산 트래픽 처리를 해줘야 합니다.
 
 
 
