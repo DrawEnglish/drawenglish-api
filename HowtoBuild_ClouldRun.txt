@@ -353,9 +353,9 @@ Cloud Run을 **공개 URL로 접근 가능하게 만드는 권한 설정(roles/r
 
 ---------------------------------------------------------------
 gcloud run services add-iam-policy-binding drawenglish-api ^
-More?   --region=asia-northeast3 ^
-More?   --member=allUsers ^
-More?   --role=roles/run.invoker
+  --region=asia-northeast3 ^
+  --member="allUsers" ^
+  --role="roles/run.invoker"
 ---------------------------------------------------------------
 Updated IAM policy for service [drawenglish-api].
 bindings:
@@ -385,9 +385,13 @@ gcp_openapi.json 파일 servers - url 변경해야함.
 
 
 
+gcloud run services add-iam-policy-binding drawenglish-api ^
+  --region=us-central ^
+  --member="allUsers" ^
+  --role="roles/run.invoker"
 
 
-
+us-central1
 
 
 
