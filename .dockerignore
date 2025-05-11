@@ -24,3 +24,5 @@ Thumbs.db
 # Git
 .git
 .gitignore
+
+bfg-1.15.0.jar

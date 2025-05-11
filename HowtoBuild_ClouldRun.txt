@@ -4,6 +4,8 @@
 - 빌드 기록 : https://console.cloud.google.com/cloud-build/builds?inv=1&invt=AbxGPg&project=drawenglish-api
 - Cloud Run 서비스 보기 : https://console.cloud.google.com/run
   해당 서비스 누르고 '로그'를 누르면 해당 서비스에 대한 로그를 볼 수 있다.
+- Cloud Build : https://console.cloud.google.com/cloud-build
+- Cloud Build - 트리거 : https://console.cloud.google.com/cloud-build/triggers
 
 
 
@@ -175,8 +177,10 @@ drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔�
 ★ 로컬 PC에서의 배포는 .env 파일도 올라가니 API Key를 저장한 경우에는 주의해야함.
    그래서 GCP에선 보통 .env 파일 대신 환경 변수 설정이나 Secret Manager를 권장합니다.
    - 환경 변수 설정 (Cloud Run / App Engine) : gcloud run deploy --set-env-vars 또는 콘솔에서 설정
-   - Secret Manager 사용 : 민감 정보는 Secret Manager에 저장하고 앱에서 API로 불러옴
+   - Secret Manager 사용 : API키를 GCP Secret Manager에 저장하고 Cloud Run 서비스에서 '비밀 참조'로 환경 변수처럼 사용
    ♥♥♥ 추가로 알아보고 작성해야 하는 사항
+※ 아래 명령은 웹에서 환경변수의 이름/값을 CLI를 통해 설정/저장하는 명령
+gcloud run services update drawenglish-api --update-env-vars OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxx
 
 ※ 아래와 같은 코드 있으면 배포 안됨 ???(확인 안된 사항)
 # 아래 부분 주석처리 또는 삭제
@@ -196,6 +200,69 @@ drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔�
 
 ■ 배포 명령어 - GitHub를 통해 
 -------------------------------
+◎ GitHub → Cloud Run 배포 기본 흐름
+1) GitHub에 프로젝트 업로드
+  .gitignore 잘 설정 (민감 정보 제외)
+2) Google Cloud Build를 GitHub와 연동
+  Cloud Console에서 클릭 몇 번으로 가능
+3) Cloud Build 트리거 생성
+  특정 브랜치나 커밋 발생 시 Cloud Run으로 자동 배포
+4) Cloud Build 설정 파일(cloudbuild.yaml) 작성
+  Dockerfile로 이미지 빌드 후 Cloud Run에 배포 명령 포함
+★ 민감정보 .env 등은 절대 GitHub에 올리지 않고
+   Cloud Build 환경변수나 Secret Manager로 안전하게 삽입.
+
+▷ GitHub 리포지토리 생성 : Render방식 참고
+
+▷ Git 초기화, 원격저장소 생성, 커밋, 푸시
+git init
+git remote add origin https://github.com/drawenglish/drawenglish-api.git
+git add .
+git commit -m "초기 커밋"
+git push -u origin main
+
+▷ GCP에서 Cloud Build 연동(트리거 설정)
+Google Cloud Console → Cloud Build > 트리거 접속(아래 링크)
+https://console.cloud.google.com/cloud-build/triggers
+
+
+
+
+
+
+
+
+
+■ Google Cloud Run에서 API 키관리
+----------------------------------
+1) 로컬을 위한 세팅
+c:\drawenglish-api 폴더에 .env 파일 생성 아래 입력하고 저장
+OPENAI_API_KEY=키값
+
+▷ github에 저장 안되게 하기
+.env는 절대 GitHub에 업로드 하면 안됨(하려고 해도 경고/에러 메시지 남)
+c:\drawenglish-api 폴더에 .gitignore 파일 생성하고 아래 입력하고 저장
+.env
+__pycache__/
+*.pyc
+※ 이로인해 .env가 업로드 되는 것을 방지한다.
+
+▷ 로컬PC에서 GCP로 배소시 업로드 안되게 하기
+.dockerignore 파일안에 아래 두줄 넣기 
+.env
+*.env
+
+
+2) Render에 OpenAI 키 등록하기(Render에서 환경변수 설정)
+Render에 로그인 후 배포한 서비스(Project) 선택(예: drawenglish-api)
+상단 탭에서 “Environment” 또는 “Environment Variables” 클릭
+Key에 → OPENAI_API_KEY
+Value에 → sk-xxxxxxxxxxxxxx 키 값 입력
+저장 (자동 적용됨)
+ ※ 그럼 서버가 재시작될 때 이 환경변수가 자동으로 적용돼!
+
+
+
 
 
 
@@ -213,6 +280,16 @@ drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔�
 - openapi.yaml[json]에 사용하는 서버 URL이 HTTPS여야 함 (예: https://yourapi.com)
 - API 서버의 CORS 정책이 설정되어 있어야 함
 - OpenAI 측에서 내부적으로 자동 허용 가능한 도메인 리스트에 올라 있어야 함 (대부분의 상용 도메인은 가능)
+
+
+
+
+
+
+
+
+
+
 
 
 

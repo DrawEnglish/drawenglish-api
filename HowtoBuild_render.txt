@@ -138,6 +138,9 @@ GitHub에 새 레포지토리 만들기
 
 GitHub 원격 저장소 연결
 git remote add origin https://github.com/drawenglish/drawenglish-api.git
+ - git remote add : 새 원격 저장소를 추가하겠다는 명령
+ - origin : 원격 저장소의 이름 (기본적으로 origin을 많이 사용)
+ - https://github.com/drawenglish/drawenglish-api.git : 연결할 GitHub 저장소의 URL
 
 
 GitHub Pages 설정
@@ -417,13 +420,6 @@ pip install python-dotenv
 
 
 
-
-
-
-
-
-
-
 다른 PC에서 개발환경을 구축(동기화)하고자 할때
 ----------------------------------------------
 
@@ -490,6 +486,7 @@ git push origin main
    venv\Scripts\activate
    pip install fastapi uvicorn  또는  pip install -r requirements.txt
    uvicorn app.main:app --reload
+
 
 
 ■■■ Python 콘솔에서 소스 테스트 하고 싶을때
@@ -585,19 +582,6 @@ uvicorn app.main:app --reload
 
 
 
-
-
-기타 참고사항
--------------
-
-main.py와 openapi.json은 맞추어서 수정해 주어야 한다.
-
-Python 코드 작업을 수월하게 하고 싶다면 VS Code 설치
-
-
-
-
-
 ■ 전체 캐시 + 쿠키 삭제
 
 Ctrl + Shift + Delete  # 대화창의 전체 대화 삭제됨
@@ -625,4 +609,68 @@ OpenAI Billing 페이지에서 “Add to credit balance” 클릭
 3. 요금제 변경 및 한도 설정 확인 (선택 사항)
 “Usage limits”에서 월 사용 한도 확인 가능
 과금 정책이 걱정된다면 spend limit도 설정 가능
+
+
+
+■ GitHub에서 Push를 거부하는 경우 해결책
+-----------------------------------------
+
+▷ 문제되는 파일 기록 갱신
+git add HowtoBuild_GitHub_ClouldRun.txt
+git commit --amend  # 방금 전 만든 마지막 커밋을 수정(덮어쓰기)
+:wq  # 저장 후 종료
+
+▷ 강제 푸시(정말 안전할 때만!)
+git push -f origin main
+
+▷ 위 과정으로도 안되면 BFG Repo-Cleaner 사용 완전 삭제
+https://rtyley.github.io/bfg-repo-cleaner/ 접속 → bfg-x.xx.x.jar 다운로드
+또는 아래 링크에서 직접 다운로드 후 drawenglish-api 폴더에 복사
+https://repo1.maven.org/maven2/com/madgag/bfg/1.15.0/bfg-1.15.0.jar
+
+기존 리포를 복제
+git clone --mirror https://github.com/DrawEnglish/drawenglish-api.git
+cd drawenglish-api.git
+
+푸시 거부 파일 제거
+java -jar bfg-1.15.0.jar --delete-files 파일이름
+
+Git reflog 제거 및 압축
+git reflog expire --expire=now --all
+git gc --prune=now --aggressive
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+기타 참고사항
+-------------
+
+Python 코드 작업을 수월하게 하고 싶다면 VS Code 설치
+
 

@@ -1,3 +1,4 @@
 .env
 __pycache__/
 *.pyc
+bfg-1.15.0.jar
