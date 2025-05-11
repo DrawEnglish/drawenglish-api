@@ -153,25 +153,19 @@ gcloud services enable run.googleapis.com
 ■ 배포 명령어 (복사해서 붙여넣기)
 ----------------------------------
 
-main.py에서 
-client = OpenAI() 이부분을 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-위처럼 수정해야 함.
-
-
 프로젝트 폴더로 이동해서
 cd C:/drawenglish-api 
 
 아래 명령어 실행
-gcloud run deploy drawenglish-api --source . --region asia-northeast3 --platform managed --allow-unauthenticated
+gcloud run deploy drawenglish-api --source . --region us-central1 --platform managed --allow-unauthenticated
 
 drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔도 돼)
 --source .: 현재 디렉토리에 있는 Dockerfile 기준으로 빌드
 --region asia-northeast3: 서울 리전
 --allow-unauthenticated: 외부 공개 API로 만들기 (GPT에서 접근 가능하게)
 
-※ 아래와 같은 코드 있으면 배포 안됨 ???
-# 🚫 이 부분 주석처리 또는 삭제
+※ 아래와 같은 코드 있으면 배포 안됨 ???(확인 안된 사항)
+# 아래 부분 주석처리 또는 삭제
 # if __name__ == "__main__":
 #     test("They elected him president.")
 #     ...
