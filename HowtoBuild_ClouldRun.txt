@@ -14,6 +14,7 @@ CI/CD 자동배포 : 코드만 push하면 자동으로 운영 반영
 - Cloud Build : https://console.cloud.google.com/cloud-build
 - Cloud Build - 트리거 : https://console.cloud.google.com/cloud-build/triggers
 - Secret manager : https://console.cloud.google.com → 햄버거메뉴 → 보안 → Secret Manager
+- Cloud Run : https://console.cloud.google.com/run
 
 
 
@@ -272,19 +273,19 @@ steps:
       - --platform
       - managed
       - --allow-unauthenticated
-      - --set-env-vars                 # 환경 변수로 설정
-      - OPENAI_API_KEY=OPENAI_API_KEY  # Secret Manager에 저장한 OPENAI_API_KEY를
+      - --set-env-vars                 # 이 2줄은 Secret Manager 관련 설정 부분
+      - OPENAI_API_KEY=OPENAI_API_KEY  # 이 줄은 .env 안 쓰는 방식
 
 availableSecrets:  # Secret Manager에 API Key 저장 설정 부분
   secretManager:
     - versionName: projects/614338445338/secrets/OPENAI_API_KEY/versions/latest
-      env: 'OPENAI_API_KEY'  
+      env: 'OPENAI_API_KEY'
 
 images:
   - 'gcr.io/$PROJECT_ID/drawenglish-api'
 
 options:
-  logging: CLOUD_LOGGING_ONLY
+  logging: CLOUD_LOGGING_ONLY  # 이 부분이 없어도 빌드 안될 수 있음
   machineType: 'E2_HIGHCPU_8'
   dynamic_substitutions: true
 
@@ -315,12 +316,33 @@ git push
 https://console.cloud.google.com/cloud-build/builds 를 통해 성공 여부 및 로그 확인
 - 빌드를 누르면 단계별(Build, Push, Deploy) 세부 로그 확인 가능
 - 성공했다면 로그 맨 아래에 Cloud Run URL이 표시됨
-  Service URL: https://drawenglish-api-614338445338.us-central1.run.app  
-  ☞ 실제 접속은 https://drawenglish-api-614338445338.us-central1.run.app/docs 가 가능
+  Service URL:  https://drawenglish-api-614338445338.asia-northeast3.run.app  
+  ☞ 실제 접속은  https://drawenglish-api-614338445338.asia-northeast3.run.app/docs 가 가능
 
 ▷ 트리거의 리전 선택에 따라 빌드가 안될 수 있음.
  - failed precondition: due to quota restrictions, cannot run builds in this region와 같은 에러가 남.
  - 자동 빌드가 가능한 트리거 리전 : global 또는 us-central1로 설정
+
+
+▷ 주의: "IAM Policy failed" 경고
+Cloud Run을 **공개 URL로 접근 가능하게 만드는 권한 설정(roles/run.invoker)**이 실패했습니다.
+따라서 지금은 외부 사용자가 이 URL에 접근할 수 없을 가능성이 높습니다 (403 에러 날 수 있어요)
+다음 명령어를 실행하면 Cloud Run을 공개로 전환할 수 있습니다:
+
+---------------------------------------------------------------
+gcloud run services add-iam-policy-binding drawenglish-api ^
+More?   --region=asia-northeast3 ^
+More?   --member=allUsers ^
+More?   --role=roles/run.invoker
+---------------------------------------------------------------
+Updated IAM policy for service [drawenglish-api].
+bindings:
+- members:
+  - allUsers
+  role: roles/run.invoker
+etag: BwY03WcCUT0=
+version: 1
+
 
 
 
