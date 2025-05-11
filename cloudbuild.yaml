@@ -1,7 +1,7 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/drawenglish-api', '.']
-    secretEnv: ['OPENAI_API_KEY']
+    secretEnv: ['OPENAI_API_KEY']   # Secret Manager 관련 설정 부분
 
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/drawenglish-api']
@@ -15,19 +15,24 @@ steps:
       - --image
       - gcr.io/$PROJECT_ID/drawenglish-api
       - --region
-      - us-central1
+      - asia-northeast3
       - --platform
       - managed
       - --allow-unauthenticated
-      - --set-env-vars
-      - OPENAI_API_KEY=OPENAI_API_KEY
+      - --set-env-vars                 # 이 2줄은 Secret Manager 관련 설정 부분
+      - OPENAI_API_KEY=OPENAI_API_KEY  # 이 줄은 .env 안 쓰는 방식
 
-availableSecrets:
+availableSecrets:  # Secret Manager에 API Key 저장 설정 부분
   secretManager:
     - versionName: projects/614338445338/secrets/OPENAI_API_KEY/versions/latest
       env: 'OPENAI_API_KEY'
 
-options:
-  logging: CLOUD_LOGGING_ONLY
+images:
+  - 'gcr.io/$PROJECT_ID/drawenglish-api'
 
-timeout: 600s
+options:
+  logging: CLOUD_LOGGING_ONLY  # 이 부분이 없어도 빌드 안될 수 있음
+  machineType: 'E2_HIGHCPU_8'
+  dynamic_substitutions: true
+
+timeout: 600s  # 지정하지 않을때의 기본값이 600초임
