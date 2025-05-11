@@ -379,10 +379,8 @@ GCP의 Cloud Load Balancer + 멀티 리전 Cloud Run이 가장 실전적이고 �
 
 
 
-
-
-
-
+gcp_openapi.json 파일 servers - url 변경해야함.
+"url": "https://api.drawenglish.com" 
 
 
 
