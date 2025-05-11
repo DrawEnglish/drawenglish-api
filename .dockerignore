@@ -4,6 +4,10 @@ __pycache__/
 *.pyo
 *.pyd
 
+# 환경설정
+.env
+*.env
+
 # 테스트
 tests/
 *.log

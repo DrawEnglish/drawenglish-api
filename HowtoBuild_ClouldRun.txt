@@ -1,6 +1,9 @@
 ◎ Google Cloud Run 관련 주요 링크
 - 프로젝트 ID 리스트 : https://console.cloud.google.com/projectselector2/home/dashboard
 - 내 결재계정(billing Account) 설정 : https://console.cloud.google.com/billing
+- 빌드 기록 : https://console.cloud.google.com/cloud-build/builds?inv=1&invt=AbxGPg&project=drawenglish-api
+- Cloud Run 서비스 보기 : https://console.cloud.google.com/run
+  해당 서비스 누르고 '로그'를 누르면 해당 서비스에 대한 로그를 볼 수 있다.
 
 
 
@@ -150,8 +153,8 @@ gcloud services enable run.googleapis.com
 ☞ Operation "operations/acf.p2-614338445338-d855f9d9-8230-4e11-bf1b-dd6eeb8977f6" finished successfully. 나오면 성공
 
 
-■ 배포 명령어 (복사해서 붙여넣기)
-----------------------------------
+■ 배포 명령어 - 로컬 PC에서 
+-----------------------------
 
 프로젝트 폴더로 이동해서
 cd C:/drawenglish-api 
@@ -164,11 +167,36 @@ drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔�
 --region asia-northeast3: 서울 리전
 --allow-unauthenticated: 외부 공개 API로 만들기 (GPT에서 접근 가능하게)
 
+※배포 실패/성공시 콘솔에 로그를 볼수 있는 링크를 띄워준다
+  예) https://console.cloud.google.com/cloud-build/builds;region=us-central1
+  /0630485b-cecf-48e0-acc7-e0cc6ed9d8a8?project=614338445338
+  - 이 링크는 '빌드 기록' - 해당 빌드를 선택하면 보여주는 '빌드 세부정보'임
+
+★ 로컬 PC에서의 배포는 .env 파일도 올라가니 API Key를 저장한 경우에는 주의해야함.
+   그래서 GCP에선 보통 .env 파일 대신 환경 변수 설정이나 Secret Manager를 권장합니다.
+   - 환경 변수 설정 (Cloud Run / App Engine) : gcloud run deploy --set-env-vars 또는 콘솔에서 설정
+   - Secret Manager 사용 : 민감 정보는 Secret Manager에 저장하고 앱에서 API로 불러옴
+   ♥♥♥ 추가로 알아보고 작성해야 하는 사항
+
 ※ 아래와 같은 코드 있으면 배포 안됨 ???(확인 안된 사항)
 # 아래 부분 주석처리 또는 삭제
 # if __name__ == "__main__":
 #     test("They elected him president.")
 #     ...
+
+※ 배포 명령어 두가지
+1. gcloud run deploy
+   CaaS (Container as a Service) 방식
+   FastAPI, Flask + AI 모델, WebSocket 등 고유한 환경 필요하다 → gcloud run deploy
+2. gcloud app deploy
+   PaaS (Platform as a Service) 방식
+   빠르게 웹서비스 배포하고 싶다 → gcloud app deploy
+
+
+
+■ 배포 명령어 - GitHub를 통해 
+-------------------------------
+
 
 
 
