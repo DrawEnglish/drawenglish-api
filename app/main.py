@@ -1,5 +1,6 @@
 import os, json, re
 from fastapi import FastAPI  # FastAPI는 Python 기반의 웹 프레임워크로, Re=EST API를 만들때 매우 간단하고 빠름
+from fastapi.responses import JSONResponse  # render에 10분 단위 Ping 보내기를 위해 추가
 from pydantic import BaseModel  # BaseModeld=은 FastAPI에서 request/response의 데이터 검증과 자동 문서화를 위해 사용되는 클래스(Pydantic제공)
 # 아래 api_key= 까지는 .env 파일에서 OpenAI키를 불러와 설정하는 부분 
 from openai import OpenAI
@@ -289,6 +290,11 @@ async def analyze(request: AnalyzeRequest):
 async def serve_openapi():
     file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
     return FileResponse(file_path, media_type="application/json")
+
+# 아래 엔드포인트는 GET /ping 요청에 대해 {"message": "pong"} 응답을 준다.
+@app.get("/ping")
+async def ping():
+    return JSONResponse(content={"message": "pong"}, status_code=200)
 
 #if __name__ == "__main__":
 #    import uvicorn

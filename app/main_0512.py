@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # 0. 환경 설정
 load_dotenv()
 
-api_key = os.getenv("API_KEY_Secret") or os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise RuntimeError("❌ OPENAI_API_KEY is not set in environment variables.")
 client = OpenAI(api_key=api_key)

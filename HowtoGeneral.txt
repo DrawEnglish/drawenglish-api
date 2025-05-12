@@ -1,0 +1,12 @@
+■ FastAPI 기반에서 필요한 방어책(비용 폭탄 등)
+1. Rate Limiting 구현(IP 기준) : GPT 대화창 '스마트폰 API 응답문제'에 있음 : 차후 정리 필요
+   FastAPI는 자체적으로 rate-limit 미들웨어가 없지만, slowapi 또는 fastapi-limiter 라이브러리를 사용할 수 있어요.
+
+
+■ 외부 API 속도 높일 수 잇는 전략
+  - GPT 대화창 "스마트폰 API 응답문제"에 있음 : 차후 정리 필요
+  - GPT 대화창 "GCP Cloud Run 속도 개선"에 있음 : 차후 정리 필요
+
+1. Render : Pro 이상 요금제 사용 : cold start 발생 제거
+2. CCP Cloud Run : min_instances 설정으로 항상 실행상태 유지(유료)
+
