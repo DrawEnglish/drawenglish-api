@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-pip install -r requirements.txt
 
-#python -m spacy download en_core_web_sm
+echo "▶ Installing dependencies from requirements.txt..."
+pip install --no-cache-dir -r requirements.txt

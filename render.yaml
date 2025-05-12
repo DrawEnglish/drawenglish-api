@@ -7,3 +7,5 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.9
+      - key: OPENAI_API_KEY
+        sync: false  # Render Secret에 등록해둘 것

@@ -33,10 +33,13 @@ cd C:\drawenglish-api
 python -m venv venv310
 venv\Scripts\activate
 
-▷ pip 업데이트, 요구 패키지 설치, spacy 다운로드
+▷ pip 업데이트, 요구 패키지 설치, spaCy 다운로드
 python -m pip install --upgrade pip  #python 패키기 설치관리자 최신 업데이트
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
+
+▷ spaCy 설치
+pip install spacy
 
 
 ▷ 가상환경안에서 서버 실행
