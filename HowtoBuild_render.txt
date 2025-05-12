@@ -437,7 +437,7 @@ C:\drawenglish-api (❌ 삭제 또는 폴더명 변경)
 아예 처음부터 GitHub에서 최신 파일을 가져오자!
 터미널(cmd) 또는 Git Bash 열고:
 
-cd c:\drawenglish-api
+cd /   ☜ C:/ 루트로 이동
 git clone https://github.com/DrawEnglish/drawenglish-api.git
 
 이 명령어 입력하면:
@@ -636,6 +636,7 @@ cd drawenglish-api.git
 
 푸시 거부 파일 제거
 java -jar bfg-1.15.0.jar --delete-files 파일이름
+☞ Java가 설치되어 있지 않으면 아래 Java JDK 설치 안내에 따라 설치
 
 Git reflog 제거 및 압축
 git reflog expire --expire=now --all

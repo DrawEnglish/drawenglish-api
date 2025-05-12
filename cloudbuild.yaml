@@ -20,7 +20,7 @@ steps:
       - managed
       - --allow-unauthenticated
       - --set-env-vars                 # 이 2줄은 Secret Manager 관련 설정 부분
-      - OPENAI_API_KEY=OPENAI_API_KEY  # 이 줄은 .env 안 쓰는 방식
+      - OPENAI_API_KEY=OPENAI_API_KEY  # 이 줄은 .env에 API실제키 안적는 방식
 
 availableSecrets:  # Secret Manager에 API Key 저장 설정 부분
   secretManager:

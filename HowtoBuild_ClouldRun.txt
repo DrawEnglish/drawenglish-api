@@ -178,7 +178,7 @@ drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔�
 --region us-central1
 --allow-unauthenticated: 외부 공개 API로 만들기 (GPT에서 접근 가능하게)
 
-※빌드 실패/성공시 콘솔에 로그를 볼수 있는 링크를 띄워준다
+※빌드 실패/성공시 콘솔에 로그를 볼수 있는 링크를 제공해준다
   예) https://console.cloud.google.com/cloud-build/builds;region=us-central1
   /0630485b-cecf-48e0-acc7-e0cc6ed9d8a8?project=614338445338
   - 이 링크는 '빌드 기록' - 해당 빌드를 선택하면 보여주는 '빌드 세부정보'임
@@ -436,10 +436,24 @@ __pycache__/
 *.pyc
 ※ 이로인해 .env가 업로드 되는 것을 방지한다.
 
-▷ 로컬PC에서 GCP로 배소시 업로드 안되게 하기
+▷ 로컬PC에서 GCP로 빌드/배포시 업로드 안되게 하기
 .dockerignore 파일안에 아래 두줄 넣기 
 .env
 *.env
+
+2) cloudbuild.yaml 파일 내에 아래 소스를 포함시켜 입력
+
+    secretEnv: ['OPENAI_API_KEY']   # Secret Manager 관련 설정 부분
+
+      - --set-env-vars                 # 이 2줄은 Secret Manager 관련 설정 부분
+      - OPENAI_API_KEY=OPENAI_API_KEY  # 이 줄은 .env에 API실제키 안적는 방식
+
+availableSecrets:  # Secret Manager에 API Key 저장 설정 부분
+  secretManager:
+    - versionName: projects/614338445338/secrets/OPENAI_API_KEY/versions/latest
+      env: 'OPENAI_API_KEY'
+
+
 
 
 2) Render에 OpenAI 키 등록하기(Render에서 환경변수 설정)
