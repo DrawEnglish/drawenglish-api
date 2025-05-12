@@ -288,7 +288,8 @@ async def analyze(request: AnalyzeRequest):
 # FastAPI에서 custom-openapi.json 엔드포인트를 만들어서 GPTs에서 사용할 수 있도록 함.
 @app.get("/custom-openapi.json", include_in_schema=False)
 async def serve_openapi():
-    file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
+    file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "openapi.json"))
+    # file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
     return FileResponse(file_path, media_type="application/json")
 
 # 아래 엔드포인트는 GET /ping 요청에 대해 {"message": "pong"} 응답을 준다.
