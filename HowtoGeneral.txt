@@ -3,10 +3,70 @@
    FastAPI는 자체적으로 rate-limit 미들웨어가 없지만, slowapi 또는 fastapi-limiter 라이브러리를 사용할 수 있어요.
 
 
-■ 외부 API 속도 높일 수 잇는 전략
+■ 외부 API 속도 높일 수 있는 전략
   - GPT 대화창 "스마트폰 API 응답문제"에 있음 : 차후 정리 필요
   - GPT 대화창 "GCP Cloud Run 속도 개선"에 있음 : 차후 정리 필요
 
 1. Render : Pro 이상 요금제 사용 : cold start 발생 제거
 2. CCP Cloud Run : min_instances 설정으로 항상 실행상태 유지(유료)
+
+
+
+
+
+■■■ spaCy 설치
+
+https://visualstudio.microsoft.com/visual-cpp-build-tools/ 접속
+→ Build Tools 다운로드 → 설치 → C++를 사용한 데스크톱 개발 선택 → 재부팅
+* C++ buile tools 선택, Windows 10 SDK 또는 Windwos 11 SDK가 자동 선택됨.
+
+Python 3.10 설치(현재 최신버전인 3.13.을 spaCy가 지원 안함)
+Python 3.10.XX 버전 다운로드 (Windows용)
+설치 시 꼭 확인할 것:
+ - 실행하면 "Add Python 3.10 to PATH" 체크박스 반드시 체크
+ - "Customize installation" → "Install for all users" 권장
+설치 완료 후, 터미널에서 확인:
+ - python --version이 3.10.X인지 확인
+
+▷ 가상환경 진입
+cd C:\drawenglish-api
+python -m venv venv310
+venv\Scripts\activate
+
+▷ pip 업데이트, 요구 패키지 설치, spacy 다운로드
+python -m pip install --upgrade pip  #python 패키기 설치관리자 최신 업데이트
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+
+
+▷ 가상환경안에서 서버 실행
+uvicorn main:app --reload
+
+▷ http://127.0.0.1:8000/docs 실행 (테스트 가능)
+
+
+▶ 원격환경을 위한 환경 구축
+1) build.sh 파일 만들기
+ - 빈 폴더에서 마우스 우클릭 → Open Git Bash Here →
+   touch build.sh → nano build.sh → 아래 내용 입력 후 저장(Ctrl+O 엔터 후 Ctrl+X)
+   → chmod +x build.sh → bash build.sh (이건 원격에서 실행될 부분) → exit
+2) render.yaml 아래 내용으로 작성
+---------------------------------------------------------------
+services:
+  - type: web
+    name: spacy-api
+    runtime: python
+    buildCommand: ./build.sh
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.9
+---------------------------------------------------------------
+
+
+
+
+pip install spacy 설치
+
+python -m spacy download en_core_web_sm
 

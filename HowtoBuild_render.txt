@@ -431,7 +431,7 @@ pip install python-dotenv
 
 ■■■ Render 배포 서버에 10분마다 ping 보내기(cold start 방지)
 
-main.py에 아래 소스 추가해야 함.
+1) main.py에 아래 소스 추가해야 함.
 ------------------------------------------------------------------------
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -443,7 +443,7 @@ async def ping():
     return JSONResponse(content={"message": "pong"}, status_code=200)
 ------------------------------------------------------------------------
 
-openapi.json에 아래 소스 추가해야함.
+2) openapi.json에 아래 소스 추가해야함.
 ------------------------------------------------------------------------
 "/ping": {
       "get": {
@@ -471,6 +471,39 @@ openapi.json에 아래 소스 추가해야함.
       }
     }
 -------------------------------------------------------------------------
+
+3) .github/workflows/render-ping.yml 생성하여 아래 소스 입력
+-------------------------------------------------------------------------
+name: Render Keep Warm Ping
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"  # 매 10분마다 자동 실행
+  workflow_dispatch:        # 수동 실행도 가능
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render App
+        run: |
+          echo "Pinging Render app..."
+          curl -s https://drawenglish-api.onrender.com/ping
+-------------------------------------------------------------------------
+
+4) 테스트
+- GPTs에서 ping 테스트 가능 : pong 응답옴
+- GitHub → Actions → All workflows → Render Keep Warm Ping에서 확인 가능
+
+※ 윈도우즈 스케줄러를 이용하여 10분마다 한번씩 ping을 날려주는 방법도 대안임
+   아래 코드를 .bat 파일로 만들어 작업 스케줄러(트리거 10분) 작동하는 방법도 있음.
+@echo off
+curl -s https://drawenglish-api.onrender.com/ping
+
+
+
+
+
 
 
 

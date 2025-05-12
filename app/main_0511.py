@@ -1,7 +1,5 @@
 import os, json, re
-import spacy
-from fastapi import FastAPI, Request  # FastAPI는 Python 기반의 웹 프레임워크로, Re=EST API를 만들때 매우 간단하고 빠름
-from fastapi.responses import JSONResponse, FileResponse  # render에 10분 단위 Ping 보내기를 위해 추가
+from fastapi import FastAPI, FileResponse  # FastAPI는 Python 기반의 웹 프레임워크로, Re=EST API를 만들때 매우 간단하고 빠름
 from pydantic import BaseModel  # BaseModeld=은 FastAPI에서 request/response의 데이터 검증과 자동 문서화를 위해 사용되는 클래스(Pydantic제공)
 # 아래 api_key= 까지는 .env 파일에서 OpenAI키를 불러와 설정하는 부분 
 from openai import OpenAI
@@ -16,8 +14,6 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 app = FastAPI()  # FastAPI() 객체를 생성해서 이후 라우팅에 사용
-nlp = spacy.load("en_core_web_sm")  # spaCy 관련 설정
-
 
 # 1. 메모리 구조
 memory = {
@@ -46,9 +42,6 @@ class AnalyzeRequest(BaseModel):  # 사용자가 보낼 요청(sentence) 정의
 class AnalyzeResponse(BaseModel):  # 응답으로 돌려줄 데이터(sentence, diagramming) 정의
     sentence: str
     diagramming: str
-
-class ParseRequest(BaseModel):  # spaCy 관련 설정
-    text: str
 
 # 4. 문자 저장
 def store_characters(sentence: str):
@@ -220,7 +213,7 @@ def _connect(symbols, start, end):
         if symbols[i] == " ":
             symbols[i] = "_"
 
-# 8. 전각도형 후 1칸 출력 건너뛰기
+# 8. Í# 8. \xcd9c력 함수
 def print_diagram():
     diagram = diagram_filter_clean(memory["symbols"])  
     return f"\n{''.join(memory['characters'])}\n{''.join(diagram)}\n"  
@@ -290,25 +283,12 @@ async def analyze(request: AnalyzeRequest):
     apply_symbols(parsed)
     return {"sentence": request.sentence, "diagramming": print_diagram()}
 
-# 12. spaCy 파싱 관련
-@app.post("/parse")
-def parse_text(req: ParseRequest):
-    doc = nlp(req.text)
-    result = [{"text": token.text, "pos": token.pos_, "dep": token.dep_} for token in doc]
-    return {"result": result}
-
-# 13. 커스텀 OpenAPI JSON 제공 엔드포인트
+# 12. 커스텀 OpenAPI JSON 제공 엔드포인트
 # FastAPI에서 custom-openapi.json 엔드포인트를 만들어서 GPTs에서 사용할 수 있도록 함.
 @app.get("/custom-openapi.json", include_in_schema=False)
 async def serve_openapi():
     file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "openapi.json"))
-    # file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
     return FileResponse(file_path, media_type="application/json")
-
-# 14. 아래 엔드포인트는 GET /ping 요청에 대해 {"message": "pong"} 응답을 준다.
-@app.get("/ping")
-async def ping():
-    return JSONResponse(content={"message": "pong"}, status_code=200)
 
 #if __name__ == "__main__":
 #    import uvicorn
