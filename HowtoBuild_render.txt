@@ -429,9 +429,55 @@ pip install python-dotenv
 
 
 
+■■■ Render 배포 서버에 10분마다 ping 보내기(cold start 방지)
 
-다른 PC에서 개발환경을 구축(동기화)하고자 할때
-----------------------------------------------
+main.py에 아래 소스 추가해야 함.
+------------------------------------------------------------------------
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+
+app = FastAPI()
+
+@app.get("/ping")
+async def ping():
+    return JSONResponse(content={"message": "pong"}, status_code=200)
+------------------------------------------------------------------------
+
+openapi.json에 아래 소스 추가해야함.
+------------------------------------------------------------------------
+"/ping": {
+      "get": {
+        "operationId": "ping",
+        "summary": "Health check ping endpoint",
+        "description": "Returns 'pong' to indicate the service is alive.",
+        "responses": {
+          "200": {
+            "description": "Pong response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "pong"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+-------------------------------------------------------------------------
+
+
+
+
+
+■■ 다른 PC에서 개발환경을 구축(동기화)하고자 할때
+----------------------------------------------------
 
 1.PC에서 기존 C:\drawenglish-api 폴더 정리
 먼저 깨끗하게 시작할 거야.

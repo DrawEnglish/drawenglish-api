@@ -1,0 +1,15 @@
+name: Render Keep Warm Ping
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"  # 매 10분마다 자동 실행
+  workflow_dispatch:        # 수동 실행도 가능
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render App
+        run: |
+          echo "Pinging Render app..."
+          curl -s https://drawenglish-api.onrender.com/ping

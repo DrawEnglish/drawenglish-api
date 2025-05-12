@@ -29,5 +29,5 @@ async def analyze(request: AnalyzeRequest):
 #아래는 함수는 FastAPI에서 /openapi.json 엔드포인트 추가하기 위한 부분
 @app.get("/custom-openapi.json", include_in_schema=False)
 async def serve_openapi():
-    file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
+    file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "openapi.json"))
     return FileResponse(file_path, media_type="application/json")

@@ -1,5 +1,5 @@
 import os, json, re
-from fastapi import FastAPI  # FastAPI는 Python 기반의 웹 프레임워크로, Re=EST API를 만들때 매우 간단하고 빠름
+from fastapi import FastAPI, FileResponse  # FastAPI는 Python 기반의 웹 프레임워크로, Re=EST API를 만들때 매우 간단하고 빠름
 from pydantic import BaseModel  # BaseModeld=은 FastAPI에서 request/response의 데이터 검증과 자동 문서화를 위해 사용되는 클래스(Pydantic제공)
 # 아래 api_key= 까지는 .env 파일에서 OpenAI키를 불러와 설정하는 부분 
 from openai import OpenAI
@@ -287,7 +287,7 @@ async def analyze(request: AnalyzeRequest):
 # FastAPI에서 custom-openapi.json 엔드포인트를 만들어서 GPTs에서 사용할 수 있도록 함.
 @app.get("/custom-openapi.json", include_in_schema=False)
 async def serve_openapi():
-    file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
+    file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "openapi.json"))
     return FileResponse(file_path, media_type="application/json")
 
 #if __name__ == "__main__":
