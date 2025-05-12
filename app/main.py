@@ -310,7 +310,4 @@ async def serve_openapi():
 async def ping():
     return JSONResponse(content={"message": "pong"}, status_code=200)
 
-#if __name__ == "__main__":
-#    import uvicorn
-#    uvicorn.run("app.main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
