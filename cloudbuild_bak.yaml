@@ -1,7 +1,7 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/drawenglish-api', '.']
-    secretEnv: ['API_KEY']   # Secret Manager 관련 설정 부분
+    secretEnv: ['OPENAI_API_KEY']   # Secret Manager 관련 설정 부분
 
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/drawenglish-api']
@@ -19,12 +19,13 @@ steps:
       - --platform
       - managed
       - --allow-unauthenticated
-    secretEnv: ['API_KEY']
+      - --set-env-vars                 # 이 2줄은 Secret Manager 관련 설정 부분
+      - OPENAI_API_KEY=OPENAI_API_KEY  # 이 줄은 .env에 API실제키 안적는 방식
 
 availableSecrets:  # Secret Manager에 API Key 저장 설정 부분
   secretManager:
     - versionName: projects/614338445338/secrets/OPENAI_API_KEY/versions/latest
-      env: 'API_KEY'  # GCP콘솔의 '보안 비밀 참조' 이름과 동일해야 함
+      env: 'OPENAI_API_KEY'
 
 images:
   - 'gcr.io/$PROJECT_ID/drawenglish-api'

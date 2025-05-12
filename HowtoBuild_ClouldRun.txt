@@ -461,7 +461,7 @@ availableSecrets:  # Secret Manager에 API Key 저장 설정 부분
   → 이름(OPENAI_API_KEY) → 보안 비밀 값(API 실제 키 입력)
   → 버전 자동 생성을 체크한 상태로 '만들기'
 
-4)
+4) 빌드 콘솔에서 
 
 
 2) Render에 OpenAI 키 등록하기(Render에서 환경변수 설정)
