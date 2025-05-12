@@ -62,11 +62,16 @@ services:
       - key: PYTHON_VERSION
         value: 3.10.9
 ---------------------------------------------------------------
+※위 2개 파일은 drawenglish-api 루트 폴더에 저장
+
+▶ GitHub에 커밋/푸시
+git init
+git add .
+git commit -m "Initial commit for spaCy API"
+git remote add origin https://github.com/your-username/your-repo.git
+git push -u origin main
 
 
 
 
-pip install spacy 설치
-
-python -m spacy download en_core_web_sm
 
