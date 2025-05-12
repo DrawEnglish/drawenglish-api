@@ -6,6 +6,35 @@
   - build.sh : 렌더 전용 (spaCy 모델 다운로드)
   - Dockerfile : GCP 전용
 
+
+
+
+
+◎ GitHub 주소
+
+
+
+◎ Render 배포 주소
+https://drawenglish-api.onrender.com
+- FAST API Swagge 주소
+https://drawenglish-api.onrender.com/docs
+- GPTs 연결 URL 가져오기
+https://drawenglish-api.onrender.com/custom-openapi.json
+https://drawenglish-api.onrender.com/openapi.json
+
+
+◎ GCR 주소
+- API 배포 주소
+https://drawenglish-api-614338445338.asia-northeast3.run.app
+- FAST API Swagge 주소
+https://drawenglish-api-614338445338.asia-northeast3.run.app/docs
+
+- GPTs 연결 URL 가져오기
+https://drawenglish.github.io/drawenglish-api/gcp_openapi.json
+
+
+
+
 ===============================================================
 
 FastAPI + GitHub + Render로 DrawEnglish API 다시 구축
