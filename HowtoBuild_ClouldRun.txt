@@ -454,6 +454,14 @@ availableSecrets:  # Secret Manager에 API Key 저장 설정 부분
       env: 'OPENAI_API_KEY'
 
 
+  *이전에 Secret Manager API '사용' 버튼을 누르라고(활성화 하라고) 할 수 있다.
+
+3) Google Cloud 콘솔 메인에서 Secret Manager 설정
+- GPC 콘솔 메인 → 햄버거 → 보안 → Secret Manager → 보안 비밀 만들기
+  → 이름(OPENAI_API_KEY) → 보안 비밀 값(API 실제 키 입력)
+  → 버전 자동 생성을 체크한 상태로 '만들기'
+
+4)
 
 
 2) Render에 OpenAI 키 등록하기(Render에서 환경변수 설정)
