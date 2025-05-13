@@ -1,3 +1,10 @@
+venv\Scripts\activate
+
+git add .
+git commit -m "Git Update General"
+git push origin main
+
+
 ■■ Render와 GCP 구별 사항
 ----------------------------
 ◎ 서비스 포트 : Render 10000, GCP 8000
@@ -7,11 +14,14 @@
   - Dockerfile : GCP 전용
 
 
-
+◎ 로컬 서버(가상환경) 주소
+uvicorn app.main:app --reload  // 기본포트 8000
+ ☞ https://127.0.0.1:8000/docs 로 접속가능
+uvicorn app.main:app --host 0.0.0.0 --port 10000  // 명시안하면 8000
+ ☞ https://가상환경구축PC_IP:10000/docs 로 접속가능
 
 
 ◎ GitHub 주소
-
 
 
 ◎ Render 배포 주소
@@ -31,8 +41,6 @@ https://drawenglish-api-614338445338.asia-northeast3.run.app/docs
 
 - GPTs 연결 URL 가져오기
 https://drawenglish.github.io/drawenglish-api/gcp_openapi.json
-
-
 
 
 ===============================================================
@@ -100,8 +108,21 @@ C:\drawenglish-api 폴더로 이동
 python -m venv venv  → venv 폴더 생김 ?
 venv\Scripts\activate → (venv) C:\drawenglish-api> 로 프롬프트 바뀜
 
-필요한 패키지 설치
-pip install fastapi uvicorn ← Fastapi 패키지 설치
+python 가상환경 웹서버 관련 패키지 설치
+pip install fastapi uvicorn ← Fastapi과 uvicorn 패키지 동시 설치
+
+spaCy 패키지도 설치
+pip install spaCy
+
+openai 패키지도 설치
+pip install openai
+
+python-dotenv 패키지도 설치
+pip install python-dotenv
+
+spaCy 모델 설치
+python -m spacy download en_core_web_sm
+
 
 *fastapi : API를 만들 수 있게 해주는 Python 웹 프레임워크(설계도구)
  식당을 설계하고 요리 메뉴를 짜는 것(어떤 API를 만들지 코딩하는 역할)
@@ -135,13 +156,13 @@ async def analyze(request: AnalyzeRequest):
 
 
 ★★★ uvicorn app.main:app --reload
-위 명령으로 실행해 보기 : app 폴더 생김?
+위 명령으로 실행해 보기
 
 ※ uvicorn app.main:app --host 0.0.0.0 --port 10000
    위명령은 운영환경, 성능좋음, 코드 수정시 서버 자동 재시작 X
 
    uvicorn app.main:app --reload
-   위 명령은 개발환경, 코드수정 서버 자동재시작, 디버깅과 빠른 데스트, 성능 떨어짐
+   위 명령은 개발환경, 코드수정 서버 자동재시작, 디버깅과 빠른 테스트, 성능 떨어짐
 
  * IP 0.0.0.0은 모든 IP에서 접근 가능, IP생략하면 127.0.0.1(로컬만 접근가능)로 기본 설정
    포트는 명시가능, 명시안하면 기본값 8000 사용
@@ -577,16 +598,19 @@ cd drawenglish-api
 dir
 
 (또는 윈도우 탐색기로 C:\drawenglish-api 폴더 열어봐.)
-app/
-openapi.json
-requirements.txt (있다면)
-.git (숨김 파일)
+.git(숨김파일), .github, app/, drawenglish-api.git, 
+openapi.json, requirements.txt (있다면) 등 ignore하지않은 모든 root 밑 파일
 이런 파일/폴더가 보이면 성공이야! ✨
 
 4. 가상환경(venv) 다시 세팅 (선택)
 만약 새로운 컴퓨터 환경이라면:
 python -m venv venv
 .\venv\Scripts\activate
+
+
+필수패키지 사전설치
+python을 3.11.9로 설치
+
 
 pip install fastapi uvicorn  #필수 패키지 설치
 📦 FastAPI 서버를 로컬에서 돌리고 싶을 때 설치해야 함.
