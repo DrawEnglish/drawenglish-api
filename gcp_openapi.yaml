@@ -1,0 +1,26 @@
+openapi: 3.1.0
+info:
+  title: DrawEnglish API
+  description: An API for sentence diagramming.
+  version: 1.0.0
+servers:
+  - url: https://gpts.drawenglish.com/
+paths:
+  /analyze:
+    post:
+      operationId: analyzeSentence
+      summary: Analyze an English sentence and return diagram.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sentence:
+                  type: string
+              required:
+                - sentence
+      responses:
+        '200':
+          description: Success

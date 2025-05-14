@@ -172,6 +172,7 @@ cd C:/drawenglish-api
 
 아래 명령어 실행
 gcloud run deploy drawenglish-api --source . --region us-central1 --platform managed --allow-unauthenticated
+☞ 이 명령 실행하면 Cloud Run 웹콘솔에도 Service가 생성된다.
 
 drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔도 돼)
 --source .: 현재 디렉토리에 있는 Dockerfile 기준으로 빌드
@@ -182,6 +183,8 @@ drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔�
   예) https://console.cloud.google.com/cloud-build/builds;region=us-central1
   /0630485b-cecf-48e0-acc7-e0cc6ed9d8a8?project=614338445338
   - 이 링크는 '빌드 기록' - 해당 빌드를 선택하면 보여주는 '빌드 세부정보'임
+
+
 
 ★ 로컬 PC에서의 빌드는 .env 파일도 올라가니 API Key를 저장한 경우에는 주의해야함.
    그래서 GCP에선 보통 .env 파일 대신 환경 변수 설정이나 Secret Manager를 권장합니다.
@@ -235,7 +238,7 @@ Google Cloud Console → Cloud Build > 트리거 접속(아래 링크)
 https://console.cloud.google.com/cloud-build/triggers
 
 ▷ 트리거 만들기 
-이름: github-auto-deploy
+이름: github-deploy-auto
 리전 : us-central1(아이오와) 선택
 이벤트: 브랜치로 푸시 / "푸시될 때" (push to branch)
 소스 저장소 생성 : 1세대
@@ -247,6 +250,15 @@ https://console.cloud.google.com/cloud-build/triggers
    (Git 저장소 내의 Cloud Build 구성 파일 경로를 지정)
 GitHub에 빌드 로그 전송 체크 ???
 서비스 계정 : 614338445338-compute@developer.gserviceaccount.com 선택
+저장 버튼 클릭
+
+▷ Cloud Run 콘솔에서 서비스 만들기
+Cloud Run → 컨테이너 배포 → 서비스 → "저장소에서 지속적 배포(소스 또는 함수)" 선택
+→ Cloud Build로 설정 →  소스 저장소(DrawEnglish/drawenglish-api 선택)
+→ 빌드구성(^main$) → 빌드유형(Dockfile 선택) → 소스위치(/Dockerfile) → 저장
+→ 변수및보안비밀 : 환경변수 이름1(OPENAI_API_KEY), 값1(OPENAI_API_KEY),
+   보안비밀참조 : 이름1(API_KEY), 보안비밀(OPENAI_API_KEY), 버전1(latest) → 완료 → 배포
+
 
 ▷ cloudbuild.yaml 파일 만들기
 프로젝트 루트에 cloudbuild.yaml 파일을 아래 내용으로 생성
@@ -354,7 +366,7 @@ gcloud run services delete drawenglish-api --region us-central1
 1) 다음 명령어를 실행하면 Cloud Run을 공개로 전환할 수 있습니다:
 ---------------------------------------------------------------
 gcloud run services add-iam-policy-binding drawenglish-api ^
-  --region=asia-northeast3 ^
+  --region=us-central1 ^
   --member="allUsers" ^
   --role="roles/run.invoker"
 ---------------------------------------------------------------
@@ -372,7 +384,7 @@ Cloud Run을 **공개 URL로 접근 가능하게 만드는 권한 설정(roles/r
 
 2) 또는 Cloud Run → 서비스 → 체크 → 권한 → 주 구성원 추가 → allusers, Cloud Run/Cloud Run 호출자 추가 가능
 
-☞ gcloud run services get-iam-policy drawenglish-api --region=asia-northeast3
+☞ gcloud run services get-iam-policy drawenglish-api --region=us-central1
    위 명령을 통해 부여된 권한 확인 가능
 
 

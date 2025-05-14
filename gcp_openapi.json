@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-            "url": "https://gpts.drawenglish.com"
+            "url": "https://gpts.drawenglish.com/"
     }
   ],
   "paths": {
