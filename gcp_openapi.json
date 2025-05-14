@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-            "url": "https://drawenglish-api-614338445338.asia-northeast3.run.app"
+            "url": "https://drawenglish-api-614338445338.us-central1.run.app"
     }
   ],
   "paths": {
