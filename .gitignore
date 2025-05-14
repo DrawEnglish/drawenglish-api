@@ -1,5 +1,17 @@
-.env
+# Python
 __pycache__/
 *.pyc
+*.pyo
+
+# 환경파일
+.env
+
+# 가상환경
 venv/
+
+# .git폴더 및 로컬 bare 저장소 무시
+.git/
+drawenglish-api.git/
+
+# 기타
 bfg-1.15.0.jar

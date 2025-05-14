@@ -562,25 +562,25 @@ curl -s https://drawenglish-api.onrender.com/ping
 
 
 
-
-
-
-
-
-
-
 ■■ 다른 PC에서 개발환경을 구축(동기화)하고자 할때
 ----------------------------------------------------
 
-1.PC에서 기존 C:\drawenglish-api 폴더 정리
-먼저 깨끗하게 시작할 거야.
-만약 C:\drawenglish-api 폴더 안에 의미 없는 파일(비어있거나 쓰다만 거) 있다면
-그 폴더를 통째로 삭제해줘.
+■ Git 설치
+https://git-scm.com/downloads 홈페이지에서 설치파일로 설치
+설치시 아래 항목 꼭 체크
+- Git from the command line and also from 3rd-party software
+- Git LFS (옵션)
+git --version 로 설치 여부와 버전 확인
+설치 후 기본 설정
+git config --global user.name "DrawEnglish"
+git config --global user.email "drawenglish@gmail.com"
+* git는 C:\Program Files\Git\ 폴더에 설치됨
+
+■ PC에서 기존 C:\drawenglish-api 폴더 정리
+C:\drawenglish-api 폴더를 통째로 삭제 또는 다른 위치에 저장.
 (또는 이름 바꿔도 됨: 예 drawenglish-api-old 이런 식으로.)
 
-C:\drawenglish-api (❌ 삭제 또는 폴더명 변경)
-
-2. 새로 GitHub에서 프로젝트 복제 (clone)
+■ 새로 GitHub에서 프로젝트 복제 (clone)
 아예 처음부터 GitHub에서 최신 파일을 가져오자!
 터미널(cmd) 또는 Git Bash 열고:
 
@@ -590,59 +590,98 @@ git clone https://github.com/DrawEnglish/drawenglish-api.git
 이 명령어 입력하면:
 C:\drawenglish-api\ 폴더가 자동으로 만들어지고
 GitHub에 있던 최신 코드가 다 내려와!
-✅ 여기에는 app/main.py, openapi.json, .git 폴더까지 다 들어올 거야.
+✅ 여기에는 app/main.py, openapi.json 등등
+gitignore 하지않은 모든 root 아래 파일이 다 들어올 거야.
 
-3. 내려왔는지 확인
+이런 파일/폴더가 보이면 성공이야!
 
-cd drawenglish-api
-dir
+☞ 백업해 둔 .env 파일은 drawenglish-api폴더에 수동으로 복사해주어야 함
 
-(또는 윈도우 탐색기로 C:\drawenglish-api 폴더 열어봐.)
-.git(숨김파일), .github, app/, drawenglish-api.git, 
-openapi.json, requirements.txt (있다면) 등 ignore하지않은 모든 root 밑 파일
-이런 파일/폴더가 보이면 성공이야! ✨
+■ python 설치 (spaCy 의존성을 위해 3.11.9 버전 설치 ??)
+https://www.python.org/downloads/ 에서 다운로드 후 설치
+- Add Python 3.x to PATH  ← 반드시 체크!
+* C:\Users\drawe\AppData\Local\Microsoft\WindowsApps\ 폴더에 설치됨
 
-4. 가상환경(venv) 다시 세팅 (선택)
-만약 새로운 컴퓨터 환경이라면:
-python -m venv venv
-.\venv\Scripts\activate
+■ pip는 python 설치할때 함께 설치됨
+- pip 최선버전 업데이트
+python -m pip install --upgrade pip  ☜ 선택사항임
+
+github에 안올려도 되는 것들
+venv, .git, app\__pycache__, 
+
+■ 가상환경(venv) 설치 및 구동
+C:\drawenglish-api 폴더로 이동
+
+python -m venv venv  / 가상환경(venv) 구축
+.\venv\Scripts\activate  / 가상환경 실행
+☞ venv 폴더 생성됨.
+
+※ FastAPI와 uvicorn 설치 유형은 전역환경과 가상환경 2가지가 있다.
+
+■ 가상환경 안에 FastAPI(Python 웹 프레임워크) 설치
+- pip show fastapi, fastapi --version, pip list | findstr fastapi, where fastapi
+ 위 명령어들로 설치여부 확인 가능
+- 설치 안되어 있으면 아래 명령으로 설치
+pip install fastapi
+☞ C:\drawenglish-api\venv\Lib\site-packages\fastapi\ 관련 폴더들이 생성됨
+☞ C:\drawenglish-api\venv\Lib\scripts\fastapi.exe 파일이 생성됨
 
 
-필수패키지 사전설치
-python을 3.11.9로 설치
+■ 가상환경 안에 uvicorn(python ASGI 웹 서버) 설치 또는 구축
+- pip show uvicorn, uvicorn --version, pip list | findstr uvicorn, where uvicorn
+ 위 명령어들로 설치여부 확인 가능
+- 설치 안되어 있으면 아래 명령으로 설치
+pip install uvicorn
+☞ C:\drawenglish-api\venv\Lib\site-packages\uvicorn\ 관련 폴더들이 생성됨
+☞ C:\drawenglish-api\venv\Lib\scripts\uvicorn.exe 파일이 생성됨
 
+■ requirements.txt를 이용해 그 밖의 필요 패키지 일괄 설치 
+pip install -r requirements.txt
 
-pip install fastapi uvicorn  #필수 패키지 설치
-📦 FastAPI 서버를 로컬에서 돌리고 싶을 때 설치해야 함.
-
-또는 
-pip install -r requirements.txt 명령으로 일괄? 설치
-
-로컬 서버 실행
+■ 로컬 서버 실행 및 접속
 uvicorn app.main:app --reload
 http://127.0.0.1:8000/docs 웹페이지 열림
 
+※drawenglish-api 폴더 자체를 통채로 복사하는 방식으로 개발환경 구축 할때는
+'venv' 폴더는 제외해야 하고, 아래 명령으로 새로 만드는게 안전
+(OS 차이로 문제 발생 할 수 있음)
 
-5. 뭔가 작업 후엔 반드시 커밋 + 푸시
+cd drawenglish-api
+python -m venv venv
+venv\Scripts\activate
+pip install fastapi uvicorn
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+
+
+■ 뭔가 작업 후엔 반드시 커밋 + 푸시
+git init  /  이 명령은 git 버전관리를 시작할때 한번만 해주면 됨
 git add .
 git commit -m "Update diagram logic"
 git push origin main
 
 
-※ drawenglish-api 폴더 자체를 통채로 압축해서 복사하는 방식으로 개발환경 구축 할때는
-   'venv' 폴더는 제외해야 하고, 아래 명령으로 새로 만드는게 안전
-   (OS 차이로 문제 발생 할 수 있음)
+■ 프로젝트 내 폴더들의 의미
 
-   cd drawenglish-api
-   python -m venv venv
-   venv\Scripts\activate
-   pip install fastapi uvicorn  또는  pip install -r requirements.txt
-   uvicorn app.main:app --reload
+▷ git init 또는 git clone 의 의미
+.git (숨김)폴더가 생기고,
+add, commit, push, branch 등의 명령을 실행할 수 있게 된다.
+
+.git/
+├── config           ← 저장소 설정
+├── HEAD             ← 현재 브랜치
+├── hooks/           ← 커밋 전후 동작 자동화
+├── objects/         ← 커밋/파일의 해시 저장
+├── refs/            ← 브랜치, 태그 정보
+├── logs/            ← 작업 로그
+
+▷ app\__pycache__
+.py 파일을 import 하거나 실행하면 또 자동 생성돼는 캐시파일(지워도 필요시 또 생성됨)
 
 
 
 ■■■ Python 콘솔에서 소스 테스트 하고 싶을때
-
+---------------------------------------------
 
 ■ cmd창에서 직접 실행
 (venv) C:\drawenglish-api> python app/main.py

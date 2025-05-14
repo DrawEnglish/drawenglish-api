@@ -4,9 +4,17 @@ __pycache__/
 *.pyo
 *.pyd
 
-# 환경설정
+# 환경파일
 .env
 *.env
+
+#가상환경
+venv/
+
+# Git 저장소 데이터
+.git/
+drawenglish-api.git/
+.gitignore
 
 # 테스트
 tests/
@@ -21,8 +29,5 @@ tests/
 .DS_Store
 Thumbs.db
 
-# Git
-.git
-.gitignore
-
+# 기타
 bfg-1.15.0.jar
