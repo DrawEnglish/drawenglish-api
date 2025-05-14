@@ -16,7 +16,6 @@ CI/CD 자동배포 : 코드만 push하면 자동으로 운영 반영
 - Secret manager : https://console.cloud.google.com → 햄버거메뉴 → 보안 → Secret Manager
 - Cloud Run : https://console.cloud.google.com/run
 - Cloud Run - 서비스 - 로그 : https://console.cloud.google.com/run/detail/asia-northeast3/drawenglish-api/logs
-- 로그 스토리지(로그 버킷 설정) : https://console.cloud.google.com/logs/storage
 
 
 ■ Dockerfile 작성
@@ -179,7 +178,7 @@ drawenglish-api: 서비스 이름 (마음에 드는 다른 이름으로 바꿔�
 --region us-central1
 --allow-unauthenticated: 외부 공개 API로 만들기 (GPT에서 접근 가능하게)
 
-※빌드 실패/성공시 콘솔에 로그를 볼수 있는 링크를 제공해준다
+※빌드 실패/성공시 콘솔에 로그를 볼수 있는 링크를 띄워준다
   예) https://console.cloud.google.com/cloud-build/builds;region=us-central1
   /0630485b-cecf-48e0-acc7-e0cc6ed9d8a8?project=614338445338
   - 이 링크는 '빌드 기록' - 해당 빌드를 선택하면 보여주는 '빌드 세부정보'임
@@ -230,12 +229,6 @@ git remote add origin https://github.com/drawenglish/drawenglish-api.git
 git add .
 git commit -m "초기 커밋"
 git push -u origin main
-
-▷  GCP에서 Cloud Build 저장소 만들기?
-Google Cloud Console → Cloud Build → 저장소(또는 트리거에서 저장소 연결?)
-→ 소스 제공업체 : GitHub(Cloud Build GitHub 앱)
-→ 인증
-→ 저장 범위(모든 저장소 또는 DrawEnglish/drawenglish-api만 선택해서 연결
 
 ▷ GCP에서 Cloud Build 연동(트리거 설정)
 Google Cloud Console → Cloud Build > 트리거 접속(아래 링크)
@@ -352,7 +345,6 @@ https://console.cloud.google.com/run → 서비스 에서 확인 가능
 gcloud run services delete drawenglish-api --region us-central1
 
 
-
 ▷ Cloud Run Service에 AllUsers에게 Cloud Run 호출자(Inverer) 권한 부여
 ------------------------------------------------------------------------
 ※ IAM(Identity and Access Management) : 신원 및 접근관리
@@ -392,8 +384,6 @@ Cloud Run → 서비스 → 해당 서비스명 클릭 → 새버전 수정 및 
 
 
 
-▷ Clould Build 로그 버킷 구성 추가 ???
------------------------------------
 
 
 
@@ -415,6 +405,21 @@ gcp_openapi.json 파일 servers - url 변경해야함.
 
 
 
+gcloud run services add-iam-policy-binding drawenglish-api ^
+  --region=us-central ^
+  --member="allUsers" ^
+  --role="roles/run.invoker"
+
+
+us-central1
+
+
+
+
+
+
+
+
 
 ■ Google Cloud Run에서 API 키관리
 ----------------------------------
@@ -430,66 +435,25 @@ __pycache__/
 *.pyc
 ※ 이로인해 .env가 업로드 되는 것을 방지한다.
 
-▷ 로컬PC에서 GCP로 빌드/배포시 업로드 안되게 하기
+▷ 로컬PC에서 GCP로 배소시 업로드 안되게 하기
 .dockerignore 파일안에 아래 두줄 넣기 
 .env
 *.env
 
-2) cloudbuild.yaml 파일은 아래와 같이 구성한다.
-------------------------------------------------------
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/drawenglish-api', '.']
-    secretEnv: ['API_KEY']   # Secret Manager 관련 설정 부분
 
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/drawenglish-api']
-
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - drawenglish-api
-      - --image
-      - gcr.io/$PROJECT_ID/drawenglish-api
-      - --region
-      - asia-northeast3
-      - --platform
-      - managed
-      - --allow-unauthenticated
-    secretEnv: ['API_KEY']   # API_KEY는 GCP콘솔 '보안비밀참조' 이름과 일치
-
-availableSecrets:  # Secret Manager에 API Key 저장 설정 부분
-  secretManager:
-    - versionName: projects/614338445338/secrets/OPENAI_API_KEY/versions/latest
-      env: 'API_KEY'  # main.py에 api_key = os.getenv("API_KEY") 부분이 있어야 함.
-
-images:
-  - 'gcr.io/$PROJECT_ID/drawenglish-api'
-
-options:
-  logging: CLOUD_LOGGING_ONLY  # 이 부분이 없어도 빌드 안될 수 있음
-  machineType: 'E2_HIGHCPU_8'
-  dynamic_substitutions: true
-
-timeout: 600s  # 지정하지 않을때의 기본값이 600초임
----------------------------------------------------------
-※ .env파일은 OPENAI_API_KEY=sk-proj- 로 설정
+2) Render에 OpenAI 키 등록하기(Render에서 환경변수 설정)
+Render에 로그인 후 배포한 서비스(Project) 선택(예: drawenglish-api)
+상단 탭에서 “Environment” 또는 “Environment Variables” 클릭
+Key에 → OPENAI_API_KEY
+Value에 → sk-xxxxxxxxxxxxxx 키 값 입력
+저장 (자동 적용됨)
+ ※ 그럼 서버가 재시작될 때 이 환경변수가 자동으로 적용돼!
 
 
-  *이전에 Secret Manager API '사용' 버튼을 누르라고(활성화 하라고) 할 수 있다.
-3) Google Cloud 콘솔 메인에서 Secret Manager 설정
-- GPC 콘솔 메인 → 햄버거 → 보안 → Secret Manager → 보안 비밀 만들기
-  → 이름(OPENAI_API_KEY) → 보안 비밀 값(API 실제 키 입력)
-  → 버전 자동 생성을 체크한 상태로 '만들기'???
 
 
-4) Cloud Run 서비스에서 '새 버전 수정 및 배포'
-- 컨테이너 → 변수 및 보안 비밀 → 환경변수 → 변수추가
-  → 이름1(OPENAI_API_KEY), 값1(OPENAI_API_KEY),
-  → + 보안 비밀 참조 → 이름(API_KEY), 보안비밀(OPENAI_API_KEY), 버전1(latest)
-  → 완료 → 배포
+
+
 
 
 ==================================================================
