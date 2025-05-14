@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://drawenglish-api.onrender.com"
+      "url": "https://api.drawenglish.com"
     }
   ],
   "paths": {

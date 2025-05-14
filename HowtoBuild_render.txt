@@ -26,7 +26,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 10000  // 명시안하면 8000
 ◎ GitHub 주소
 
 
-◎ Render 배포 주소
+◎ Render 배포 주소 : api.drawenglish.com으로 매핑함
 https://drawenglish-api.onrender.com
 - FAST API Swagge 주소
 https://drawenglish-api.onrender.com/docs
@@ -35,7 +35,7 @@ https://drawenglish-api.onrender.com/custom-openapi.json
 https://drawenglish-api.onrender.com/openapi.json
 
 
-◎ GCR 주소
+◎ GCR 주소 : gpts.drawenglish.com으로 매핑함
 - API 배포 주소
 https://drawenglish-api-614338445338.asia-northeast3.run.app
 - FAST API Swagge 주소
@@ -605,7 +605,7 @@ https://www.python.org/downloads/ 에서 다운로드 후 설치
 * C:\Users\drawe\AppData\Local\Microsoft\WindowsApps\ 폴더에 설치됨
 
 ■ pip는 python 설치할때 함께 설치됨
-- pip 최선버전 업데이트
+- pip 최신버전 업데이트
 python -m pip install --upgrade pip  ☜ 선택사항임
 
 github에 안올려도 되는 것들
