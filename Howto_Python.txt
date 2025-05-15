@@ -1,0 +1,168 @@
+★ import는 단순히 “있는지 확인하고 가져오는” 동작이 아니라,
+   모듈을 로드하면서 내부적으로 여러 단계를 거쳐 sys.modules에 등록하는 과정
+
+▷ import가 실제 하는 일
+import some_module
+- 이 한 줄이 실행되면 Python은 다음과 같은 과정을 수행해:
+- sys.modules에 이미 있는지 확인
+  없으면 .py, .pyc, 패키지 등 파일을 찾아 모듈 로드
+- 모듈을 실행하고, sys.modules['some_module']에 등록
+- 실패하면 ImportError 발생
+
+
+■ import 할 수 있는 대상
+모듈 : import math : .py 파일 전체를 가져옴
+패키지 : import app.main : 폴더(__init__.py 포함) + 모듈 구조
+함수 : from mymodule import myfunc : 모듈 안의 함수
+클래스 : from mymodule import MyClass : 모듈 안의 클래스
+변수/상수 : from config import API_KEY : 모듈 안의 전역 변수
+타입/데이터 구조 : from typing import List, Dict : 타입 힌트 용도 등
+데코레이터 : from utils import log_decorator : 함수처럼 사용되지만 실은 변수임
+객체 인스턴스 : from settings import db_connection : 모듈 안에 생성된 실제 객체도 가능
+
+
+■ 설치된 패키지 목록 보기
+pip list
+pip show spacy  / 특정 패키지가 설치되었는지 확인
+pip freeze > requirements.txt  / 설치된 패키지를 requirements.txt로 저장
+pip install -r requirements.txt  / 현재 가상환경에 설치된 모든 패키지를 파일로 저장해 나중에 재설치
+
+
+■ import 가능한 모듈 전체 보기
+python
+>>> help('modules')
+
+
+■ 실제 import 명령으로 import된 모듈 목록
+
+확인 준비
+import sys
+print(sys.modules.keys())  # sys.modules는 현재 import된 모듈들의 딕셔너리
+
+확인방법
+import math  # 임포트 예
+import json  # 임포트 예
+
+import sys
+for name in sys.modules.keys():
+    print(name)
+
+
+■ 현재 스코프에서 사용 중인 모듈만 확인
+import os
+import math
+import json
+
+import sys
+print("🔍 현재 import된 모듈들 (실제 사용한 것만):")
+for name, val in globals().items():
+    if isinstance(val, type(sys)):
+        print(f"{name} → {val.__file__ if hasattr(val, '__file__') else '내장 모듈'}")
+
+
+■ import한 모듈 제거
+import sys
+import some_module
+del sys.modules['some_module']
+
+
+■ import한 모듈 수정 후 갱신(재로드)
+import importlib
+import my_module
+importlib.reload(my_module)
+
+
+■ import한 함수가 정의된 모듈(파일) 확인
+print(inspect.getfile(test))
+
+
+
+■ 현재 import된 함수들만 추출
+import inspect
+from app.main import test, store_characters
+imported_funcs = {
+    name: obj
+    for name, obj in globals().items()
+    if inspect.isfunction(obj) and obj.__module__ == 'app.main'
+}
+print("✅ main.py에서 import된 함수들:")
+for name in imported_funcs:
+    print(f"- {name}")
+
+
+■ import한 함수의 소소 코드 확인
+
+import inspect
+from app.main import test  # test() 함수가 main.py에 정의돼 있다고 가정
+print(inspect.getsource(test))
+
+* 컴파일된 .pyc나 C 확장, 내장(built-in) 함수는 안 됨
+* 모듈이 파일에서 로드된 경우 (인터프리터에 직접 입력한 함수는 실패할 수 있음)
+
+
+■ app.main.py 파일 안에 선언한 test() 함수 사용방법
+
+1) 모듈(.py파일)을 import하는 방법
+>>> import app.main
+>>> app.main.test("I love you.")
+
+2) 모듈(.py파일) 內 함수를 import하는 방법
+>>> from app.main import test
+>>> test("I love you.")
+
+
+■ 모듈(main.py)에 정의된 함수 일괄적으로 import
+
+1) main.py 안에 
+__all__ = [
+    "store_characters",
+    "gpt_parse",
+    "apply_symbols",
+    "print_diagram",
+    "test"
+]
+
+>>> from app.main import *
+
+☞ min.py 안 __all__에 선언된 모든 공개 함수/변수 가져옴
+❌ __all__이 없으면, 밑도 끝도 없이 공개된 모든 이름이 다 import될 수 있어서
+   위험하고 비추천이야.
+   즉, 해당 모듈의 모든 글로벌 변수, 함수, 클래스 중에서 __로 시작하지 않는 이름들이
+   전부 import됨
+
+
+
+위 명령은 아래 명령과 동일한 효과
+>>> from main import store_characters, gpt_parse, apply_symbols, print_diagram, test
+
+
+
+
+
+
+
+◆ 특수 문자 사용법
+--------------------
+
+: 블록이 필요한 문장 끝에 씀
+if x > 0:
+    print("Positive")
+    print("Still in the block")
+
+for i in range(3):
+    print(i)
+
+def greet(name):
+    print("Hello,", name)
+
+( 여러줄 쓰기(블록 아닌 경우)
+total = (
+    1 +
+    2 +
+    3
+)
+
+\ 줄 연결 가능 (Python 권장 방식은 아님)
+total = 1 + \
+        2 + \
+        3

@@ -61,7 +61,7 @@ def store_characters(sentence: str):
     ]
 
 # 5. GPT 파시함수
-def gpt_parse(sentence: str, verbose: bool = True):
+def gpt_parse(sentence: str):
     prompt = f"""
 Analyze the following English sentence and return a JSON array.
 
@@ -242,16 +242,12 @@ def diagram_filter_clean(diagram):
     return cleaned
 
 # 9. 디버깅용 테스트 함수
-def test(sentence: str, verbose: bool = True):
-    if not verbose:
-        import builtins
-        builtins.print = lambda *args, **kwargs: None
-
-    print("\n==============================")
+def test(sentence: str):
+    print("\n=============77=================")
     print("🔹 입력 문장:", sentence)
 
     store_characters(sentence)
-    parsed = gpt_parse(sentence, verbose=verbose)
+    parsed = gpt_parse(sentence)
 
     print("\n📊 Parsed JSON:")
     print(json.dumps(parsed, indent=2))

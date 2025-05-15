@@ -643,6 +643,8 @@ pip install -r requirements.txt
 ■ 로컬 서버 실행 및 접속
 uvicorn app.main:app --reload
 http://127.0.0.1:8000/docs 웹페이지 열림
+☞ FastAPI가 자동 생성한 OpenAPI 스펙 + Swagger UI HTML
+   get_swagger_ui_html() 활용하여 커스터마이징 가능
 
 ※drawenglish-api 폴더 자체를 통채로 복사하는 방식으로 개발환경 구축 할때는
 'venv' 폴더는 제외해야 하고, 아래 명령으로 새로 만드는게 안전
