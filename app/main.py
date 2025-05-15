@@ -220,7 +220,7 @@ def _connect(symbols, start, end):
         if symbols[i] == " ":
             symbols[i] = "_"
 
-# 8. 전각도형 후 1칸 출력 건너뛰기
+# 전각도형 후 1칸 출력 건너뛰기
 def print_diagram():
     diagram = diagram_filter_clean(memory["symbols"])  
     return f"\n{''.join(memory['characters'])}\n{''.join(diagram)}\n"  
@@ -228,7 +228,7 @@ def print_diagram():
     #return f"\n{''.join(memory['characters'])}\n{''.join(memory['symbols'])}\n"
 
 
-# 8-1. 출력 복지 함수 (◇, ▽ 뒤 1칸 무시) #◇,▽후 1칸 보정 필요 없을시 이 함수 전체 필요 없음음
+# ◇, ▽ 뒤 1칸 출력 건너뛴 cleaned
 def diagram_filter_clean(diagram):
     cleaned = []
     skip_next = False
@@ -243,9 +243,6 @@ def diagram_filter_clean(diagram):
 
 # 9. 디버깅용 테스트 함수
 def test(sentence: str):
-    print("\n=============77=================")
-    print("🔹 입력 문장:", sentence)
-
     store_characters(sentence)
     parsed = gpt_parse(sentence)
 
@@ -275,7 +272,8 @@ __all__ = [
     "gpt_parse",
     "apply_symbols",
     "print_diagram",
-    "test"
+    "test",
+    "diagram_filter_clean"
 ]
 
 # 11. 분석 API 엔드포인트

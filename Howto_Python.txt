@@ -1,3 +1,9 @@
+python
+from app.main import test
+
+test("")
+
+
 ★ import는 단순히 “있는지 확인하고 가져오는” 동작이 아니라,
    모듈을 로드하면서 내부적으로 여러 단계를 거쳐 sys.modules에 등록하는 과정
 
@@ -67,9 +73,21 @@ del sys.modules['some_module']
 
 
 ■ import한 모듈 수정 후 갱신(재로드)
+import main
 import importlib
-import my_module
-importlib.reload(my_module)
+importlib.reload(main)
+
+또는
+import main
+from importlib import reload
+reload(main)
+
+<tip> 한줄 유틸 함수로 만들기
+def r(m):
+    import importlib
+    return importlib.reload(m)
+☞사용은 r(main)
+
 
 
 ■ import한 함수가 정의된 모듈(파일) 확인
