@@ -4,6 +4,12 @@ from app.main import test
 test("")
 
 
+◆ Pytho에서 사용하는 정해진 특수 속성
+__name__	이 모듈의 이름 (__main__, spacy, 등)
+__file__	이 모듈이 어디서 로딩되었는지 경로
+__package__	상위 패키지 이름 (있는 경우)
+
+
 ★ import는 단순히 “있는지 확인하고 가져오는” 동작이 아니라,
    모듈을 로드하면서 내부적으로 여러 단계를 거쳐 sys.modules에 등록하는 과정
 
@@ -64,6 +70,10 @@ print("🔍 현재 import된 모듈들 (실제 사용한 것만):")
 for name, val in globals().items():
     if isinstance(val, type(sys)):
         print(f"{name} → {val.__file__ if hasattr(val, '__file__') else '내장 모듈'}")
+
+
+■ import한 모듈안의 속성, 메서드들의 목록 출력
+dir(모듈명)
 
 
 ■ import한 모듈 제거
@@ -184,3 +194,34 @@ total = (
 total = 1 + \
         2 + \
         3
+
+
+
+
+
+
+
+
+
+
+
+============================================================================================
+
+VS Cord에서 Python코드의 색깔별 의미
+
+🟣 보라색 : import, from : Python 예약어 (키워드) — 언어에 내장된 구조
+💚 밝은 녹색 : os, json, re, spacy : 모듈 이름 (import 대상 패키지 또는 라이브러리 이름)
+⚪ 흰색 : FastAPI, Request, JSONResponse, BaseModel : 클래스나 함수 이름 등 실제로 import된 객체 식별자
+🟡 밝은 노란색 : getenv	내장 함수 또는 외부 모듈의 함수 (os.getenv)
+🩶 회색 : Request (import된 후 사용 X) : "사용되지 않은 식별자" 또는 "미사용 import 경고"
+🟧 주황색	API_KEY	상수처럼 보이는 변수 (대문자 + snake_case)
+🩵 하늘색	api_key	일반 지역 변수 (snake_case, 보통 설정 값, 매개변수 이름)
+🔵 파란색	or, not	Python 예약어(keyword) — 논리 연산자
+
+
+
+
+
+
+
+

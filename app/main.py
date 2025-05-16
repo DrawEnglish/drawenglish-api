@@ -1,13 +1,13 @@
 import os, json, re
 import spacy
-from fastapi import FastAPI, Request  # FastAPI는 Python 기반의 웹 프레임워크로, Re=EST API를 만들때 매우 간단하고 빠름
+from fastapi import FastAPI, Request  
 from fastapi.responses import JSONResponse, FileResponse  # render에 10분 단위 Ping 보내기를 위해 추가
-from pydantic import BaseModel  # BaseModeld=은 FastAPI에서 request/response의 데이터 검증과 자동 문서화를 위해 사용되는 클래스(Pydantic제공)
-# 아래 api_key= 까지는 .env 파일에서 OpenAI키를 불러와 설정하는 부분 
+from pydantic import BaseModel
+# 아래 api_key= 까지는 .env 파일에서 OpenAI키를 불러오기 관련 부분 
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# 0. 환경 설정
+# 환경 설정
 load_dotenv()
 
 api_key = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -18,8 +18,7 @@ client = OpenAI(api_key=api_key)
 app = FastAPI()  # FastAPI() 객체를 생성해서 이후 라우팅에 사용
 nlp = spacy.load("en_core_web_sm")  # spaCy 관련 설정
 
-
-# 1. 메모리 구조
+# 메모리 구조
 memory = {
     "characters": [],
     "symbols": [],
@@ -27,7 +26,7 @@ memory = {
     "word_positions": []
 }
 
-# 2. 심볼 매핑
+# 심볼 매핑
 role_to_symbol = {
     "verb": "○",
     "object": "□",

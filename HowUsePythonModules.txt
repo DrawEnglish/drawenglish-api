@@ -1,0 +1,67 @@
+🧰 Python 내장 모듈 요약 리스트
+📂 파일 및 디렉토리 관련
+os	운영체제 기능 사용 (경로, 환경변수, 파일관리 등)
+pathlib	파일 경로 객체 지향식 처리 (최신 방식 추천!)
+shutil	파일/디렉토리 복사, 삭제 등 고급 작업
+tempfile	임시 파일 및 디렉토리 생성
+
+📊 데이터 처리
+모듈	설명
+json	JSON 파일 읽기/쓰기 (dict ↔ JSON)
+csv	CSV 파일 읽고 쓰기
+re	정규표현식(패턴 검색 및 치환)
+collections	고급 자료구조 (Counter, deque, defaultdict 등)
+itertools	반복 가능한 객체 조합, 순열, 필터링 등
+
+🕒 날짜 및 시간
+모듈	설명
+datetime	날짜, 시간 처리 (날짜계산, 포맷팅 등)
+time	시간 지연, 현재 시간 측정 등
+
+🔐 암호화 및 해싱
+모듈	설명
+hashlib	SHA256, MD5 등 해시 알고리즘
+uuid	고유한 식별자(UUID) 생성
+
+🧪 테스트 및 디버깅
+모듈	설명
+unittest	단위 테스트 프레임워크
+logging	로그 출력 및 파일 저장
+traceback	예외 트레이스 정보 추출
+
+🌐 인터넷 & 네트워크
+모듈	설명
+http.client	HTTP 요청 보내기 (저수준)
+urllib.request	간단한 웹 요청
+socket	TCP/IP 소켓 통신
+
+🧮 수학 및 통계
+모듈	설명
+math	삼각함수, 지수, 로그 등 수학 연산
+random	난수 생성
+statistics	평균, 분산, 중앙값 등 통계 연산
+
+💡 기타 유용한 것들
+모듈	설명
+sys	파이썬 인터프리터 관련 정보 (argv, exit, path)
+argparse	CLI 인자 처리 (명령줄 인터페이스)
+typing	타입 힌트 지원 (List, Dict, Optional 등)
+enum	열거형 상수 정의 (Enum)
+
+🔧 예시: 가장 많이 쓰는 조합
+python
+Copy
+Edit
+import os
+import json
+from pathlib import Path
+import re
+import datetime
+
+
+============================================================================================
+
+내 main.py에 적힌 것들 관련
+
+# FastAPI는 Python 기반의 웹 프레임워크로, Re=EST API를 만들때 매우 간단하고 빠름
+# BaseModeld=은 FastAPI에서 request/response의 데이터 검증과 자동 문서화를 위해 사용되는 클래스(Pydantic제공)
