@@ -44,7 +44,7 @@ class AnalyzeRequest(BaseModel):  # 사용자가 보낼 요청(sentence) 정의
 
 class AnalyzeResponse(BaseModel):  # 응답으로 돌려줄 데이터(sentence, diagramming) 정의
     sentence: str
-    diagramming: str  # "     ○______□__[         "
+    diagramming: str  # "They elected him president.\n ○_______□____["
 
 class ParseRequest(BaseModel):  # spaCy 관련 설정
     text: str
@@ -221,11 +221,9 @@ def _connect(symbols, start, end):
 
 # 전각도형 후 1칸 출력 건너뛰기
 def print_diagram():
-    # 보정 출력 함수 diagram_filter_cleaned 결과를 diagram변수에 저장
+    # 아래 보정 출력 함수 diagram_filter_cleaned
     diagram = diagram_filter_clean(memory["symbols"])  
-    return ''.join(diagram)
-    # "characters + 줄바꿈 + diagram + 줄바꿈"으로 return하고자 할때
-    # return f"\n{''.join(memory['characters'])}\n{''.join(diagram)}\n"  
+    return f"\n{''.join(memory['characters'])}\n{''.join(diagram)}\n"  
     # ◇,▽뒤 1칸 보정 필요 없을시 위 2줄은 아래 1줄로 치환
     # return f"\n{''.join(memory['characters'])}\n{''.join(memory['symbols'])}\n"
 
@@ -239,7 +237,7 @@ def diagram_filter_clean(diagram):
             skip_next = False
             continue
         cleaned.append(ch)
-        if ch in {'★', '☆'}:
+        if ch in {'▽', '◇'}:
             skip_next = True
     return cleaned
 

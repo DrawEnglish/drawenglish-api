@@ -3,6 +3,7 @@ git clone https://github.com/DrawEnglish/drawenglish-api.git
 cd c:\drawenglish-api
 venv\Scripts\activate
 
+cd c:\drawenglish-api
 git add .
 git commit -m "Git Update General"
 git push origin main

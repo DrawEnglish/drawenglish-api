@@ -54,7 +54,7 @@
                 },
                 "example": {
                   "sentence": "They elected him president.",
-                  "diagramming": "They elected him president.\n           ○_______□____["
+                  "diagramming": "     ○______□__[         "
                 }
               }
             }
