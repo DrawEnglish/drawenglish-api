@@ -1,6 +1,6 @@
 import os, json, re
 import spacy
-from fastapi import FastAPI, Request  
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, FileResponse  # render에 10분 단위 Ping 보내기를 위해 추가
 from pydantic import BaseModel
 # 아래 api_key= 까지는 .env 파일에서 OpenAI키를 불러오기 관련 부분 
@@ -39,22 +39,22 @@ role_to_symbol = {
 }
 
 # 요청/응답 목록
-class AnalyzeRequest(BaseModel):  # 사용자가 보낼 요청(sentence) 정의
+class AnalyzeRequest(BaseModel):   # 사용자가 보낼 요청(sentence) 정의
     sentence: str
 
 class AnalyzeResponse(BaseModel):  # 응답으로 돌려줄 데이터(sentence, diagramming) 정의
     sentence: str
-    diagramming: str  # "They elected him president.\n ○_______□____["
+    diagramming: str               # "     ○______□__[         "
 
-class ParseRequest(BaseModel):  # spaCy 관련 설정
+class ParseRequest(BaseModel):     # spaCy 관련 설정
     text: str
 
 # 문자 저장
-def store_characters(sentence: str):
-    memory["characters"] = list(sentence)  # characters 에 sentence의 글자 한글자씩 채우기
+def init_memorys (sentence: str):
+    memory["characters"] = list(sentence)        # characters에 sentence의 글자 한글자씩 채우기
     memory["symbols"] = [" " for _ in sentence]  # symbols 공간 하나하나를 공백으로 채우기
-    memory["char_lower"] = sentence.lower()  # sentence를 모두 소문자로 바꿔 char_lower에 저장
-    memory["word_positions"] = [  # 각 단어의 첫글자 인덱스들을 딕셔너리 리스트로 저장
+    memory["char_lower"] = sentence.lower()      # sentence를 모두 소문자로 바꿔 char_lower에 저장
+    memory["word_positions"] = [                 # 각 단어의 첫글자 인덱스들을 딕셔너리 리스트로 저장
         {"token": m.group(), "index": m.start(), "used": False}
         for m in re.finditer(r'\b\w+\b', memory["char_lower"])
     ]
@@ -150,9 +150,9 @@ Return ONLY the raw JSON array. Do not explain anything. Do not include any text
         print("[RAW CONTENT]", content)  # 문제가 된 원본 그대로 출력
         return []
 
-# 6. 심볼 및 발행선 적용
+# 심볼(combine 밑줄 포함) 저장하기
 def apply_symbols(parsed):
-    line = memory["char_lower"]
+    line = memory["char_lower"]  # ???? 이줄은 필요 없음 ????
     symbols = memory["symbols"]
     word_positions = memory["word_positions"]
 
@@ -185,7 +185,7 @@ def apply_symbols(parsed):
                 t_idx = find_unused(t_word)
                 if t_idx != -1 and t_symbol and symbols[t_idx] == " ":
                     symbols[t_idx] = t_symbol
-                    _connect(symbols, idx, t_idx)
+                    combine_use_(symbols, idx, t_idx)
 
         # ✅ 전치사에 combine이 있다면 (예: on → table)
         if role == "preposition" and "combine" in item:
@@ -196,7 +196,7 @@ def apply_symbols(parsed):
                 t_idx = find_unused(t_word)
                 if t_idx != -1 and t_symbol and symbols[t_idx] == " ":
                     symbols[t_idx] = t_symbol
-                    _connect(symbols, idx, t_idx)
+                    combine_use_(symbols, idx, t_idx)
 
     # ✅ 일반적인 전치사 + 목적에 관한 구조 처리 (combine 없이 나오는 경우 대비)
     for i in range(len(parsed) - 1):
@@ -209,10 +209,10 @@ def apply_symbols(parsed):
             if n_idx != -1 and symbols[n_idx] == " ":
                 symbols[n_idx] = role_to_symbol["object"]
             if c_idx != -1 and n_idx != -1:
-                _connect(symbols, c_idx, n_idx)
+                combine_use_(symbols, c_idx, n_idx)
 
-# 7. 연결 함수
-def _connect(symbols, start, end):
+# 연결 함수
+def combine_use_(symbols, start, end):
     if start > end:
         start, end = end, start
     for i in range(start + 1, end):
@@ -220,16 +220,18 @@ def _connect(symbols, start, end):
             symbols[i] = "_"
 
 # 전각도형 후 1칸 출력 건너뛰기
-def print_diagram():
-    # 아래 보정 출력 함수 diagram_filter_cleaned
-    diagram = diagram_filter_clean(memory["symbols"])  
-    return f"\n{''.join(memory['characters'])}\n{''.join(diagram)}\n"  
+def symbols_to_diagram():
+    # 보정 출력 함수 symbols_relocation 결과를 diagram변수에 저장
+    diagram = symbols_relocation(memory["symbols"])  
+    return ''.join(diagram)
+    # "characters + 줄바꿈 + diagram + 줄바꿈"으로 return하고자 할때
+    # return f"\n{''.join(memory['characters'])}\n{''.join(diagram)}\n"  
     # ◇,▽뒤 1칸 보정 필요 없을시 위 2줄은 아래 1줄로 치환
     # return f"\n{''.join(memory['characters'])}\n{''.join(memory['symbols'])}\n"
 
 
 # ◇, ▽ 뒤 1칸 출력 건너뛴 cleaned
-def diagram_filter_clean(diagram):
+def symbols_relocation(diagram):
     cleaned = []
     skip_next = False
     for ch in diagram:
@@ -237,52 +239,65 @@ def diagram_filter_clean(diagram):
             skip_next = False
             continue
         cleaned.append(ch)
-        if ch in {'▽', '◇'}:
+        if ch in {'★', '☆'}:
             skip_next = True
     return cleaned
 
 # 9. 디버깅용 테스트 함수
 def test(sentence: str):
-    store_characters(sentence)
+    init_memorys(sentence)
     parsed = gpt_parse(sentence)
-
-    print("\n📊 Parsed JSON:")
-    print(json.dumps(parsed, indent=2))
-
     apply_symbols(parsed)
+    diagram_line = symbols_to_diagram()
 
-    print("\n🔨 Diagram:")
-    print(print_diagram())
+    doc = nlp(sentence)
+    spacy_result = [
+        {"text": token.text, "pos": token.pos_, "dep": token.dep_}
+        for token in doc
+    ]
 
-    print("\n🔢 인덱스:")
-    index_line = ''.join([str(i % 10) for i in range(len(memory['characters']))])
+#    print("\n[GPT Parsing]")
+#    for item in parsed:
+#        if "combine" in item:
+#            combine_str = ", ".join([
+#                f'{{ "word": "{c["word"]}", "role": "{c["role"]}" }}'
+#                for c in item["combine"]
+#            ])
+#            print(f'  {{ "word": "{item["word"]}", "role": "{item["role"]}", "combine": [{combine_str}] }},')
+#        else:
+#            print(f'  {{ "word": "{item["word"]}", "role": "{item["role"]}" }},')
+
+    print("[spaCy Parsing]")
+    for token in spacy_result:
+        print(f'  {{ "text": "{token["text"]}", "pos": "{token["pos"]}", "dep": "{token["dep"]}" }},')
+
+    print("\n🛠 Sentence Diagram:")
+    index_line = ''.join([str(i % 10) for i in range(len(memory["characters"]))])
     print(index_line)
-    print(''.join(memory['characters']))
-    print(''.join(memory['symbols']))
+    print(sentence)
+    print(diagram_line)
 
-    print("\n🔍 단어 위치:")
-    for pos in memory["word_positions"]:
-        print(f"- {pos['token']:10s} at index {pos['index']}")
+    print("\n🔍", end=" ")
+    print(', '.join([f"{pos['token']}({pos['index']})" for pos in memory["word_positions"]]))
 
-    print("==============================\n")
 
 # 10. 모듈 외부 사용을 위한 export
 __all__ = [
-    "store_characters",
+    "init_memorys",
     "gpt_parse",
     "apply_symbols",
-    "print_diagram",
+    "symbols_to_diagram",
     "test",
-    "diagram_filter_clean"
+    "symbols_relocation"
 ]
 
 # 11. 분석 API 엔드포인트
 @app.post("/analyze", response_model=AnalyzeResponse)  # 문장을 받아서 그에 대한 "문장 구조도(다이어그램)"를 응답으로 리턴
 async def analyze(request: AnalyzeRequest):
-    store_characters(request.sentence)
+    init_memorys(request.sentence)
     parsed = gpt_parse(request.sentence)
     apply_symbols(parsed)
-    return {"sentence": request.sentence, "diagramming": print_diagram()}
+    return {"sentence": request.sentence, "diagramming": symbols_to_diagram()}
 
 # 12. spaCy 파싱 관련
 @app.post("/parse")
@@ -303,4 +318,4 @@ async def serve_openapi():
 @app.get("/ping")
 async def ping():
     return JSONResponse(content={"message": "pong"}, status_code=200)
-
+#

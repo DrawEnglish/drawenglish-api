@@ -9,13 +9,16 @@ class ParseRequest(BaseModel):     # spaCy 관련 설정
     text: str
 ☞ sentence(request), sentence(response), diagramming, text는 모두 string
 
-memory = {                         # 이 선언은 전역메모리 선언
+# 이 선언은 전역메모리(dict) 선언
+memory = {                         
     "characters": [],
     "symbols": [],
     "char_lower": "",              # characters, symbols, word_position은 list, char_lower는 string
     "word_positions": []
 }
 ☞ init_memorys 함수에서 내용 채움 또는 초기화
+
+parsed = gpt_parse(request.sentence)  # parsed는 list[dict] 디셔너리들의 리스트
 
 diagram : memory["symbols"]를 재가공해서 써먹기 위한 별도의 list 선언
 * symbols_to_diagram(), symbols_relocation(diagram)에서 쓰는 지역변수

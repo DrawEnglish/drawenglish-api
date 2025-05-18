@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# 환경 설정
+# ◎ 환경 설정
 load_dotenv()
 
 api_key = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -18,7 +18,7 @@ client = OpenAI(api_key=api_key)
 app = FastAPI()  # FastAPI() 객체를 생성해서 이후 라우팅에 사용
 nlp = spacy.load("en_core_web_sm")  # spaCy 관련 설정
 
-# 메모리 구조
+# ◎ 메모리 구조
 memory = {
     "characters": [],
     "symbols": [],
@@ -26,7 +26,7 @@ memory = {
     "word_positions": []
 }
 
-# 심볼 매핑
+# ◎ 심볼 매핑
 role_to_symbol = {
     "verb": "○",
     "object": "□",
@@ -38,7 +38,7 @@ role_to_symbol = {
     "conjunction": "◇"
 }
 
-# 요청/응답 목록
+# ◎ 요청/응답 목록
 class AnalyzeRequest(BaseModel):   # 사용자가 보낼 요청(sentence) 정의
     sentence: str
 
@@ -49,7 +49,7 @@ class AnalyzeResponse(BaseModel):  # 응답으로 돌려줄 데이터(sentence, 
 class ParseRequest(BaseModel):     # spaCy 관련 설정
     text: str
 
-# 문자 저장
+# ◎ 문자 저장
 def init_memorys (sentence: str):
     memory["characters"] = list(sentence)        # characters에 sentence의 글자 한글자씩 채우기
     memory["symbols"] = [" " for _ in sentence]  # symbols 공간 하나하나를 공백으로 채우기
@@ -59,7 +59,7 @@ def init_memorys (sentence: str):
         for m in re.finditer(r'\b\w+\b', memory["char_lower"])
     ]
 
-# 5. GPT 파시함수
+# ◎ GPT 파시함수
 def gpt_parse(sentence: str):
     prompt = f"""
 Analyze the following English sentence and return a JSON array.
@@ -150,11 +150,11 @@ Return ONLY the raw JSON array. Do not explain anything. Do not include any text
         print("[RAW CONTENT]", content)  # 문제가 된 원본 그대로 출력
         return []
 
-# 심볼(combine 밑줄 포함) 저장하기
+# ◎ 심볼(combine 밑줄 포함) 저장하기
 def apply_symbols(parsed):
     line = memory["char_lower"]  # ???? 이줄은 필요 없음 ????
-    symbols = memory["symbols"]
-    word_positions = memory["word_positions"]
+    symbols = memory["symbols"]                # 초기화된 memory["sysbols"]의 복제메모리 symbols 선언
+    word_positions = memory["word_positions"]  # 각 단어 첫 인덱스가 저장되는 복제 word_positions 선언
 
     def find_unused(word):
         for pos in word_positions:
@@ -211,7 +211,7 @@ def apply_symbols(parsed):
             if c_idx != -1 and n_idx != -1:
                 combine_use_(symbols, c_idx, n_idx)
 
-# 연결 함수
+# ◎ 연결 함수
 def combine_use_(symbols, start, end):
     if start > end:
         start, end = end, start
@@ -219,7 +219,7 @@ def combine_use_(symbols, start, end):
         if symbols[i] == " ":
             symbols[i] = "_"
 
-# 전각도형 후 1칸 출력 건너뛰기
+# ◎ 전각도형 후 1칸 출력 건너뛰기
 def symbols_to_diagram():
     # 보정 출력 함수 symbols_relocation 결과를 diagram변수에 저장
     diagram = symbols_relocation(memory["symbols"])  
@@ -229,8 +229,7 @@ def symbols_to_diagram():
     # ◇,▽뒤 1칸 보정 필요 없을시 위 2줄은 아래 1줄로 치환
     # return f"\n{''.join(memory['characters'])}\n{''.join(memory['symbols'])}\n"
 
-
-# ◇, ▽ 뒤 1칸 출력 건너뛴 cleaned
+# ◎ ◇, ▽ 뒤 1칸 출력 건너뛴 cleaned
 def symbols_relocation(diagram):
     cleaned = []
     skip_next = False
@@ -243,7 +242,7 @@ def symbols_relocation(diagram):
             skip_next = True
     return cleaned
 
-# 9. 디버깅용 테스트 함수
+# ◎ 디버깅용 테스트 함수
 def test(sentence: str):
     init_memorys(sentence)
     parsed = gpt_parse(sentence)
@@ -281,7 +280,7 @@ def test(sentence: str):
     print(', '.join([f"{pos['token']}({pos['index']})" for pos in memory["word_positions"]]))
 
 
-# 10. 모듈 외부 사용을 위한 export
+# ◎ 모듈 외부 사용을 위한 export
 __all__ = [
     "init_memorys",
     "gpt_parse",
@@ -291,22 +290,22 @@ __all__ = [
     "symbols_relocation"
 ]
 
-# 11. 분석 API 엔드포인트
-@app.post("/analyze", response_model=AnalyzeResponse)  # 문장을 받아서 그에 대한 "문장 구조도(다이어그램)"를 응답으로 리턴
-async def analyze(request: AnalyzeRequest):
-    init_memorys(request.sentence)
-    parsed = gpt_parse(request.sentence)
-    apply_symbols(parsed)
+# ◎ 분석 API 엔드포인트
+@app.post("/analyze", response_model=AnalyzeResponse)  # sentence를 받아 "sentence"와 "diagramming" 리턴
+async def analyze(request: AnalyzeRequest):            # sentence를 받아 다음 처리로 넘김
+    init_memorys(request.sentence)                     # 이 함수로 메모리 내용 채움 또는 초기화
+    parsed = gpt_parse(request.sentence)               # GPT의 파싱결과를 parsed에 저장
+    apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
     return {"sentence": request.sentence, "diagramming": symbols_to_diagram()}
 
-# 12. spaCy 파싱 관련
+# ◎ spaCy 파싱 관련
 @app.post("/parse")
 def parse_text(req: ParseRequest):
     doc = nlp(req.text)
     result = [{"text": token.text, "pos": token.pos_, "dep": token.dep_} for token in doc]
     return {"result": result}
 
-# 13. 커스텀 OpenAPI JSON 제공 엔드포인트
+# ◎ 커스텀 OpenAPI JSON 제공 엔드포인트
 # FastAPI에서 custom-openapi.json 엔드포인트를 만들어서 GPTs에서 사용할 수 있도록 함.
 @app.get("/custom-openapi.json", include_in_schema=False)
 async def serve_openapi():
@@ -314,8 +313,8 @@ async def serve_openapi():
     # file_path = os.path.join(os.path.dirname(__file__), "..", "openapi.json")
     return FileResponse(file_path, media_type="application/json")
 
-# 14. 아래 엔드포인트는 GET /ping 요청에 대해 {"message": "pong"} 응답을 준다.
+# ◎ 아래 엔드포인트는 GET /ping 요청에 대해 {"message": "pong"} 응답을 준다.
 @app.get("/ping")
 async def ping():
     return JSONResponse(content={"message": "pong"}, status_code=200)
-#
+
