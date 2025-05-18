@@ -1,6 +1,6 @@
 import os, json, re
 import spacy
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse  # render에 10분 단위 Ping 보내기를 위해 추가
 from pydantic import BaseModel
 # 아래 api_key= 까지는 .env 파일에서 OpenAI키를 불러오기 관련 부분 
@@ -152,22 +152,21 @@ Return ONLY the raw JSON array. Do not explain anything. Do not include any text
 
 # ◎ 심볼(combine 밑줄 포함) 저장하기
 def apply_symbols(parsed):
-    line = memory["char_lower"]  # ???? 이줄은 필요 없음 ????
     symbols = memory["symbols"]                # 초기화된 memory["sysbols"]의 복제메모리 symbols 선언
     word_positions = memory["word_positions"]  # 각 단어 첫 인덱스가 저장되는 복제 word_positions 선언
 
-    def find_unused(word):
+    def findwordidx_unused(word):              # 단어(word)의 첫 인덱스를 찾아주는 함수(중복 단어 건너뜀)
         for pos in word_positions:
             if pos["token"] == word.lower() and not pos["used"]:
                 pos["used"] = True
                 return pos["index"]
         return -1
 
-    for item in parsed:
+    for item in parsed:                        # role_to_symbol에 따라 해당 단어의 심볼을 sysbols에 저장함함
         word = item["word"].lower()
         role = item["role"].lower()
         symbol = role_to_symbol.get(role)
-        idx = find_unused(word)
+        idx = findwordidx_unused(word)
         if symbol and idx != -1 and symbols[idx] == " ":
             symbols[idx] = symbol
 
@@ -182,7 +181,7 @@ def apply_symbols(parsed):
                     continue
 
                 t_symbol = role_to_symbol.get(t_role)
-                t_idx = find_unused(t_word)
+                t_idx = findwordidx_unused(t_word)
                 if t_idx != -1 and t_symbol and symbols[t_idx] == " ":
                     symbols[t_idx] = t_symbol
                     combine_use_(symbols, idx, t_idx)
@@ -193,7 +192,7 @@ def apply_symbols(parsed):
                 t_word = target["word"].lower()
                 t_role = target["role"].lower()
                 t_symbol = role_to_symbol.get(t_role)
-                t_idx = find_unused(t_word)
+                t_idx = findwordidx_unused(t_word)
                 if t_idx != -1 and t_symbol and symbols[t_idx] == " ":
                     symbols[t_idx] = t_symbol
                     combine_use_(symbols, idx, t_idx)
@@ -202,8 +201,8 @@ def apply_symbols(parsed):
     for i in range(len(parsed) - 1):
         cur, nxt = parsed[i], parsed[i + 1]
         if cur["role"] == "preposition" and nxt["role"] == "object":
-            c_idx = find_unused(cur["word"])
-            n_idx = find_unused(nxt["word"])
+            c_idx = findwordidx_unused(cur["word"])
+            n_idx = findwordidx_unused(nxt["word"])
             if c_idx != -1 and symbols[c_idx] == " ":
                 symbols[c_idx] = role_to_symbol["preposition"]
             if n_idx != -1 and symbols[n_idx] == " ":
@@ -278,6 +277,8 @@ def test(sentence: str):
 
     print("\n🔍", end=" ")
     print(', '.join([f"{pos['token']}({pos['index']})" for pos in memory["word_positions"]]))
+    for pos in memory["word_positions"]:
+        print(pos)
 
 
 # ◎ 모듈 외부 사용을 위한 export

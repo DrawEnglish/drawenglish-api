@@ -14,7 +14,7 @@ git push origin main
 python
 from app.main import test
 
-test("")
+test("I love you.")
 
 
 ◆ Pytho에서 사용하는 정해진 특수 속성
