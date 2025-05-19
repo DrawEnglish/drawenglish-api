@@ -21,13 +21,15 @@ nlp = spacy.load("en_core_web_sm")  # spaCy 관련 설정, (englihs_core모델_w
 # ◎ 메모리 구조
 memory = {
 #    "characters": [],
-    "symbols": [],
+    "symbols_by_level": {},
 }
 
 # ◎ 심볼 매핑
 role_to_symbol = {
     "verb": "○",
     "object": "□",
+    "direct object": "□",
+    "indirect object": "□",
     "preposition": "▽",
     "conjunction": "◇"
 }
@@ -46,9 +48,11 @@ class ParseRequest(BaseModel):     # spaCy 관련 설정
 # ◎ 문자 저장
 def init_memorys (sentence: str):
 #    memory["characters"] = list(sentence)        # characters에 sentence의 글자 한글자씩 채우기
-    memory["symbols"] = [" " for _ in sentence]  # symbols 공간 하나하나를 공백으로 채우기
+    memory["symbols_by_level"] = {}  # 문장마다 새로 초기화
+    memory["sentence_length"] = len(sentence)  # 도식 길이 추적용 (줄 길이 통일)
 
-# ◎ GPT 파시함수
+
+# ◎ GPT 파스함수
 def gpt_parse(sentence: str):
     prompt = f"""
 Analyze the following English sentence and return a JSON array.
@@ -122,6 +126,8 @@ When a new level begins:
 This level system is used to separate clauses and reduce visual confusion in sentence diagrams.
 Combine links must only occur within the same level.
 
+
+
 🔹 Example format:
 [
   {{
@@ -160,17 +166,24 @@ Do not explain anything. Do not include any text outside the array.
 
 # ◎ symbols 메모리에 심볼들 저장하기
 def apply_symbols(parsed):
-    symbols = memory["symbols"]
+    symbols_by_level = memory["symbols_by_level"]
+    line_length = memory["sentence_length"]
 
     for item in parsed:
         idx = item.get("idx", -1)
-        role = item["role"].lower()
+        role = item.get("role", "").lower()
         pos = item.get("pos", "").upper()
+        level = item.get("level")
 
-        if idx < 0 or idx >= len(symbols):
-            continue  # 인덱스 범위 벗어나면 무시
+        if idx < 0 or level is None:
+            continue
 
-        # 보어는 pos 기반으로 도형 분기
+        # ✅ 0.5처럼 경계 레벨은 두 줄에 심볼 찍기
+        levels = [level]
+        if isinstance(level, float) and level % 1 == 0.5:
+            levels = [int(level), int(level) + 1]
+
+        # ✅ 보어 심볼 결정
         if role in ["subject complement", "object complement"]:
             if pos in ["NOUN", "PROPN", "PRON"]:
                 symbol = "["
@@ -181,13 +194,20 @@ def apply_symbols(parsed):
         else:
             symbol = role_to_symbol.get(role)
 
-        if symbol and symbols[idx] == " ":
-            symbols[idx] = symbol
+        for lvl in levels:
+            line = symbols_by_level.setdefault(lvl, [" " for _ in range(line_length)])
+            if 0 <= idx < len(line) and line[idx] == " " and symbol:
+                line[idx] = symbol
+
 
 
 # ◎ memory["symbols"] 내용을 출력하기 위해 만든 함수
 def symbols_to_diagram():
-    return ''.join(memory["symbols"])
+    output_lines = []
+    for level in sorted(memory["symbols_by_level"]):
+        line = ''.join(memory["symbols_by_level"][level])
+        output_lines.append(line)
+    return '\n'.join(output_lines)
 
 
 # ◎ 디버깅용 테스트 함수
