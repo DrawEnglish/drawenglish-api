@@ -32,11 +32,12 @@ role_to_symbol = {
     "indirect object": "□",
     "prepositional object": "□",
     "preposition": "▽",
-    "conjunction": "◇",
-    "noun subject complement": "[",
-    "adjective subject complement": "(",
-    "noun object complement": "[",
+    "conjunction": "◇"
+    "noun subject complement": "["
+    "adjective subject complement": "("
+    "noun object complement": "["
     "adjective object complement": "("
+    
 }
 
 # ◎ 요청/응답 목록
@@ -75,32 +76,17 @@ Each item must include these 10 fields, in this exact order:
 - subject: dep_ is "nsubj" or "nsubjpass"
 - verb: dep_ is "ROOT" and pos is "VERB", excluding auxiliary verbs (only the main verb per clause)
 - object: dep_ is "dobj" or "obj" - SVO
-- direct object: dep_ is "dobj" and "iobj" also exists - SVOO
+- subject complement: dep_ is "attr" or "acomp" - SVC
+- object complement: dep_ is "xcomp", "oprd", or "ccomp" - SVOC
 - indirect object: dep_ is "iobj" - SVOO
-- prepositional object: dep_ is "pobj"
+- direct object: dep_ is "dobj" and "iobj" also exists - SVOO
 - preposition: dep_ is "prep"
+- prepositional object: dep_ is "pobj"
 - conjunction: dep_ is "cc" or "mark"
-- noun subject complement: dep_ is "attr" or "acomp", and POS is NOUN, PROPN, or PRON
-- adjective subject complement: dep_ is "attr" or "acomp", and POS is ADJ
-- noun object complement: dep_ is "xcomp", "oprd", or "ccomp", and POS is NOUN, PROPN, or PRON
-- adjective object complement: dep_ is "xcomp", "oprd", or "ccomp", and POS is ADJ
 
 ❌ Do not invent new roles.  
 ❌ Do not use labels like "subject noun complement" or "relative pronoun".  
 ❌ If a token doesn’t match any of the above, omit the "role" field.
-
----
-
-For all subject and object complements, use these specific role values:
-
-- "noun subject complement" – for subject complements that are nouns, pronouns, or proper nouns
-- "adjective subject complement" – for subject complements that are adjectives
-- "noun object complement" – for object complements that are nouns, pronouns, or proper nouns
-- "adjective object complement" – for object complements that are adjectives
-
-❌ Do not use generic labels like "subject complement" or "object complement".
-
-Use POS tagging (e.g., NOUN, PROPN, PRON, ADJ) to determine whether a complement is a noun or an adjective.
 
 ---
 
@@ -155,18 +141,6 @@ Combine links must only occur within the same level.
   }}
 ]
 
-❌ Never assign the role "conjunction" to the word "to".
-
-The word "to" must be classified as one of:
-- an **infinitive marker** (i.e., "to + verb", treated as part of an infinitive phrase)
-- a **preposition** (i.e., followed by a noun or pronoun)
-
-You must decide based on the syntactic structure.
-
-Example:
-- "She wants **to go**." → "to" is part of an infinitive
-- "He walked **to the store**." → "to" is a preposition
-
 ---
 
 Sentence: "{sentence}"
@@ -181,8 +155,7 @@ Do not explain anything. Do not include any text outside the array.
             {"role": "system", "content": "You are an expert sentence analyzer."},
             {"role": "user", "content": prompt}
         ],
-        temperature=0,
-        max_tokens=500  # ✅ 명시해주면 좋아
+        temperature=0
     )
 
     try:
@@ -193,14 +166,6 @@ Do not explain anything. Do not include any text outside the array.
         print("[ERROR] GPT parsing failed:", e)
         print("[RAW CONTENT]", content)  # 문제가 된 원본 그대로 출력
         return []
-
-# GPT에게 문장 전체의 token 위치 정보를 제공하기 위한 함수
-def extract_tokens_for_gpt(text: str):
-    doc = nlp(text)
-    return [
-        {"idx": token.idx, "text": token.text}
-        for token in doc
-    ]
 
 
 # ◎ symbols 메모리에 심볼들 저장하기
@@ -222,8 +187,16 @@ def apply_symbols(parsed):
         if isinstance(level, float) and level % 1 == 0.5:
             levels = [int(level), int(level) + 1]
 
-        # 
-        symbol = role_to_symbol.get(role)
+        # ✅ 보어 심볼 결정
+        if role in ["subject complement", "object complement"]:
+            if pos in ["NOUN", "PROPN", "PRON"]:
+                symbol = "["
+            elif pos == "ADJ":
+                symbol = "("
+            else:
+                symbol = None
+        else:
+            symbol = role_to_symbol.get(role)
 
         for lvl in levels:
             line = symbols_by_level.setdefault(lvl, [" " for _ in range(line_length)])
@@ -291,7 +264,7 @@ def test1():
 # ◎ 모듈 외부 사용을 위한 export
 __all__ = [
     "init_memorys",
-    "gpt_parse",
+    "gpt_parse"
     "apply_symbols",
     "test"
 ]
