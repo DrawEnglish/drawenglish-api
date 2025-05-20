@@ -30,6 +30,7 @@ role_to_symbol = {
     "object": "□",
     "direct object": "□",
     "indirect object": "□",
+    "prepositional object": "□",
     "preposition": "▽",
     "conjunction": "◇"
 }
@@ -58,16 +59,11 @@ def gpt_parse(sentence: str):
 Analyze the following English sentence and return a JSON array.
 
 Each item must include these 10 fields, in this exact order:
-1. "text" – the word itself
-2. "role" – one of the fixed roles (see below)
-3. "pos" – part-of-speech tag (spaCy token.pos_)
-4. "dep" – dependency label (spaCy token.dep_)
-5. "combine" – optional; only for main verbs and prepositions
-6. "head" – the word this token depends on
-7. "idx" – character index (spaCy token.idx)
-8. "level" – depth in dependency tree
-9. "is_clause" – true if part of a clause
-10. "is_phrase" – true if part of a phrase
+1. "idx" – character index (spaCy token.idx)
+2. "text" – the word itself
+3. "role" – one of the fixed roles (see below)
+4. "combine" – optional; only for main verbs and prepositions
+5. "level" – depth in dependency tree
 
 ---
 
@@ -126,14 +122,17 @@ When a new level begins:
 This level system is used to separate clauses and reduce visual confusion in sentence diagrams.
 Combine links must only occur within the same level.
 
+> ✅ **Optimization Rule:**  
+> If the sentence contains **no structural triggers**, assign `"level": 0` to **all items**.  
+> You do **not** need to check for deeper structures in that case.
 
 
 🔹 Example format:
 [
   {{
-    "text": "elected", "role": "verb", "pos": "VERB", "dep": "ROOT",
+    "idx": 5, "text": "elected", "role": "verb", 
     "combine": [ {{ "text": "him", "role": "object" }}, {{ "text": "president", "role": "object complement" }} ],
-    "head": "elected", "idx": 5, "level": 0, "is_clause": true, "is_phrase": true
+    "level": 0
   }}
 ]
 
@@ -228,9 +227,8 @@ def test(sentence: str, use_gpt: bool = True):
         else:
             combine_str = "None"
         print(
-            f"● idx({item.get('idx')}), text({item.get('text')}), role({item.get('role')}), pos({item.get('pos')}), "
-            f"dep({item.get('dep')}), combine({combine_str}), head({item.get('head')}), level({item.get('level')}), "
-            f"is_clause({item.get('is_clause')}), is_phrase({item.get('is_phrase')})"
+            f"● idx({item.get('idx')}), text({item.get('text')}), role({item.get('role')}), "
+            f"combine({combine_str}), level({item.get('level')})"
         )
 
     print("\n📘 spaCy Parsing Result:")
