@@ -450,8 +450,6 @@ __all__ = [
 ]
 
 # 테스트 문장 자동 실행
-#if __name__ == "__main__":
-#    test("He told her that she is smart.")
 
 
 # ◎ 분석 API 엔드포인트
