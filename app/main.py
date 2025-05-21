@@ -424,16 +424,8 @@ def test_all(sentence: str):
 
 
 # 초간단 임시 테스트1 함수
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "What is the capital of France?"}
-    ]
-)
 
-def test1():
-    print(response.choices[0].message.content)
+
 
 # ◎ 모듈 외부 사용을 위한 export
 __all__ = [
