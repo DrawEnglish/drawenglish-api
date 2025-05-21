@@ -338,9 +338,58 @@ def test(sentence: str):
 
         print(f"● idx({idx}), text({text}), role({role}), combine({combine_str}), level({level})")
 
+    print(f"\n🛠 Diagram:")
     init_memorys(sentence)
     apply_symbols(parsed)
-    print()
+    print(symbols_to_diagram(sentence))
+
+def test_all(sentence: str):
+    print(f"\n📘 Sentence: {sentence}")
+    doc = nlp(sentence)
+    morph_data = []  # 전체 토큰 리스트 저장
+
+    # spaCy에서 full 토큰 추출
+    for token in doc:
+        morph = token.morph.to_dict()
+        morph_data.append({
+            "idx": token.idx, "text": token.text, "pos": token.pos_,
+            "tag": token.tag_, "dep": token.dep_, "head": token.head.text,
+            "head_idx": token.head.idx, "tense": morph.get("Tense"),
+            "form": morph.get("VerbForm"), "voice": morph.get("Voice"),
+            "morph": morph, "lemma": token.lemma_,
+            "is_stop": token.is_stop, "is_punct": token.is_punct, "is_alpha": token.is_alpha,
+            "ent_type": token.ent_type_, "is_title": token.is_title,
+            "children": [child.text for child in token.children]
+        })
+
+    # 구조 추론
+    parsed = rule_based_parse(morph_data)
+    parsed = propagate_levels(parsed)
+
+    print("\n📊 Full Token Info with Annotations:")
+    for token in morph_data:
+        idx = token["idx"]
+        text = token["text"]
+        role = next((t.get("role") for t in parsed if t["idx"] == idx), None)
+        combine = next((t.get("combine") for t in parsed if t["idx"] == idx), None)
+        level = next((t.get("level") for t in parsed if t["idx"] == idx), None)
+
+        combine_str = (
+            "[" + ", ".join(f"{c['text']}:{c['role']}" for c in combine) + "]"
+            if combine else "None"
+        )
+
+        print(f"● idx({idx}), text({text}), role({role}), combine({combine_str}), level({level})")
+        print(f"  POS({token['pos']}), TAG({token['tag']}), DEP({token['dep']}), HEAD({token['head']})")
+        print(f"  lemma({token['lemma']}), is_stop({token['is_stop']}), is_punct({token['is_punct']}), is_title({token['is_title']})")
+        print(f"  morph({token['morph']})")
+        print(f"  children({token['children']})")
+        print("")
+
+    # 도식 출력
+    print("🛠 Diagram:")
+    init_memorys(sentence)
+    apply_symbols(parsed)
     print(symbols_to_diagram(sentence))
 
 

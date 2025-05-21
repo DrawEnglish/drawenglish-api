@@ -15,6 +15,7 @@ git pull origin main  # Git 리모트 변경사항을 로컬PC에 병합
 
 python
 from app.main import test
+from app.main import test_all
 
 test("I love you.")
 
