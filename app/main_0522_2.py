@@ -229,6 +229,94 @@ def propagate_levels(parsed_tokens):
     return final
 
 
+# 주절(ROOT) 중심으로 계층 정렬
+def propagate_levels_with_root_priority(parsed_tokens):
+    root_token = next((t for t in parsed_tokens if t.get("role") == "verb" and t.get("dep") == "ROOT"), None)
+    if not root_token:
+        return propagate_levels(parsed_tokens)  # fallback
+
+    root_idx = root_token["idx"]
+
+    current_level = 0
+    applied_tokens = []
+
+    for t in sorted(parsed_tokens, key=lambda x: x["idx"]):
+        original_level = t.get("level", 0)
+
+        if isinstance(original_level, float) and original_level % 1 == 0.5:
+            # 트리거 발견
+            t["level"] = current_level + 0.5
+            current_level += 1
+        else:
+            t["level"] = current_level
+
+        applied_tokens.append(t)
+
+    # level 재조정: root가 level 0이 되도록 shift
+    root_token = next((t for t in applied_tokens if t["idx"] == root_idx), None)
+    offset = int(root_token["level"]) if root_token else 0
+
+    for t in applied_tokens:
+        lv = t["level"]
+        if isinstance(lv, float):
+            base = int(lv)
+            t["level"] = (base - offset) + 0.5
+        else:
+            t["level"] = lv - offset
+
+    return applied_tokens
+
+
+def propagate_levels_reorder(parsed_tokens):
+    """
+    문장 내 ROOT 동사를 기준으로
+    오른쪽(주절): level 0
+    왼쪽(종속절): level 1, 2, ...
+    트리거는 .5 단위 유지 (0.5, 1.5 등)
+    """
+
+    root_idx = -1
+    root_found = False
+    current_level = 0
+
+    # 1️⃣ ROOT 위치 찾기
+    for token in parsed_tokens:
+        if token.get("role") == "verb" and token.get("dep") == "ROOT":
+            root_idx = token["idx"]
+            root_found = True
+            break
+
+    if not root_found:
+        # fallback: 그냥 0 기준으로 진행
+        return propagate_levels(parsed_tokens)
+
+    # 2️⃣ 오른쪽 토큰들: ROOT 포함해서 level 0부터 시작
+    right_tokens = [t for t in parsed_tokens if t["idx"] >= root_idx]
+    level = 0
+    for t in right_tokens:
+        l = t.get("level", 0)
+        if isinstance(l, float) and l % 1 == 0.5:
+            t["level"] = level + 0.5
+            level += 1
+        else:
+            t["level"] = level
+
+    # 3️⃣ 왼쪽 토큰들: 종속절, level 1부터 위로 증가
+    left_tokens = [t for t in parsed_tokens if t["idx"] < root_idx]
+    level = 1
+    for t in reversed(left_tokens):  # 오른쪽에서 왼쪽으로 훑어야 구조 유지
+        l = t.get("level", 0)
+        if isinstance(l, float) and l % 1 == 0.5:
+            t["level"] = level + 0.5
+            level += 1
+        else:
+            t["level"] = level
+
+    return parsed_tokens
+
+
+
+    
 
 # ◎ GPT 프롬프트 처리 함수
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
@@ -275,7 +363,7 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
             return []
 
     # level 보정
-    parsed = propagate_levels(parsed)
+    parsed = propagate_levels_reorder(parsed)
 
     return parsed
 
@@ -412,7 +500,7 @@ def t1(sentence: str):
 
     # 구조 추론
     parsed = rule_based_parse(morph_data)
-    parsed = propagate_levels(parsed)
+    parsed = propagate_levels_reorder(parsed)
 
     print("\n📊 Full Token Info with Annotations:")
     for token in morph_data:
@@ -452,7 +540,7 @@ __all__ = [
     "guess_role",
     "guess_combine",
     "guess_level",
-    "propagate_levels",
+    "propagate_levels_reorder",
     "spacy_parsing_backgpt",
     "gpt_parsing_withprompt",
     "init_memorys",
