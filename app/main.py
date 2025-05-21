@@ -50,157 +50,215 @@ class AnalyzeResponse(BaseModel):  # 응답으로 돌려줄 데이터(sentence, 
 class ParseRequest(BaseModel):     # spaCy 관련 설정
     text: str
 
-# ◎ 문자 저장
+
+# rule 기반 분석 뼈대 함수 선언
+def rule_based_parse(tokens):
+    result = []
+    for t in tokens:
+        item = {
+            "idx": t["idx"],
+            "text": t["text"],
+            "level": 0  # 나중에 수정
+        }
+        # role 추론
+        role = guess_role(t)
+        if role:
+            item["role"] = role
+        # combine 추론
+        combine = guess_combine(t, tokens)
+        if combine:
+            item["combine"] = combine
+        result.append(item)
+    return result
+
+# role 추론 함수수
+def guess_role(t):
+    dep = t["dep"]
+    pos = t["pos"]
+    
+    # ✅ Subject
+    if dep in ["nsubj", "nsubjpass"]:
+        return "subject"
+
+    # ✅ Main Verb (only one per clause)
+    if dep == "ROOT" and pos == "VERB":
+        return "verb"
+
+    # ✅ Direct / Indirect Object
+    if dep == "iobj":
+        return "indirect object"
+    if dep in ["dobj", "obj"]:
+        return "object"
+
+    # ✅ Prepositional Object
+    if dep == "pobj":
+        return "prepositional object"
+
+    # ✅ Preposition
+    if dep == "prep":
+        return "preposition"
+
+    # ✅ Conjunction or Clause Marker (접속사)
+    if dep in ["cc", "mark"]:
+        return "conjunction"
+
+    # ✅ Subject Complement (SVC 구조)
+    if dep in ["attr", "acomp"]:
+        if pos in ["NOUN", "PROPN", "PRON"]:
+            return "noun subject complement"
+        elif pos == "ADJ":
+            return "adjective subject complement"
+
+    # ✅ Object Complement (SVOC 구조)
+    if dep in ["xcomp", "oprd", "ccomp"]:
+        if pos in ["NOUN", "PROPN", "PRON"]:
+            return "noun object complement"
+        elif pos == "ADJ":
+            return "adjective object complement"
+
+    # ✅ 그 외는 DrawEnglish 도식에서 사용 안 함
+    return None
+
+# combine 추론 함수
+def guess_combine(token, all_tokens):
+    role = token.get("role")
+    idx = token.get("idx")
+    combine = []
+
+    # ✅ Verb → object / complement (SVO, SVC)
+    if role == "verb":
+        for t in all_tokens:
+            if t.get("head_idx") == idx:
+                r = t.get("role")
+                if r in [
+                    "object", 
+                    "indirect object", 
+                    "noun subject complement", 
+                    "adjective subject complement"
+                ]:
+                    combine.append({"text": t["text"], "role": r})
+
+    # ✅ Indirect object → direct object (SVOO 구조)
+    if role == "indirect object":
+        for t in all_tokens:
+            if t.get("head_idx") == idx and t.get("role") == "object":
+                combine.append({"text": t["text"], "role": "direct object"})
+
+    # ✅ Object → object complement (SVOC 구조)
+    if role == "object":
+        for t in all_tokens:
+            if t.get("head_idx") == idx and "object complement" in (t.get("role") or ""):
+                combine.append({"text": t["text"], "role": t["role"]})
+
+    # ✅ Preposition → prepositional object
+    if role == "preposition":
+        for t in all_tokens:
+            if t.get("head_idx") == idx and t.get("role") == "prepositional object":
+                combine.append({"text": t["text"], "role": "prepositional object"})
+
+    return combine if combine else None
+
+# level 추론 함수수
+def guess_level(t, all_tokens):
+    text = t["text"].lower()
+    dep = t["dep"]
+    pos = t["pos"]
+    tag = t["tag"]
+
+    # 📍 1. Subordinating conjunctions (e.g., that, because)
+    if dep == "mark" and text in ["that", "because", "if", "although", "since", "when", "while"]:
+        return 0.5
+
+    # 📍 2. to + verb (infinitive)
+    if text == "to":
+        for child in t["children"]:
+            for tok in all_tokens:
+                if tok["text"] == child and tok["pos"] == "VERB":
+                    return 0.5
+
+    # 📍 3. Present participle (VBG)
+    if tag.endswith("VBG"):
+        return 0.5
+
+    # 📍 4. Past participle (VBN)
+    if tag.endswith("VBN"):
+        return 0.5
+
+    # 📍 5. Relative / Wh-words
+    if text in ["what", "who", "which", "that", "how", "why", "where", "whose", "whom", "whoever", "whatever", "whichever"]:
+        return 0.5
+
+    # ✅ 기본값
+    return 0
+
+
+# 0.5 level 다음 토큰들은 자동으로 n처리
+def propagate_levels(parsed_tokens):
+    current_level = 0
+    final = []
+
+    for i, token in enumerate(parsed_tokens):
+        level = token.get("level", 0)
+
+        if isinstance(level, float) and level % 1 == 0.5:
+            current_level += 1
+            token["level"] = level  # 그대로 유지 (예: 0.5)
+        else:
+            token["level"] = current_level
+
+        final.append(token)
+
+    return final
+    
+
+
+
+# ◎ GPT 프롬프트 처리 함수
+def gpt_prompt_process(sentence: str):
+    doc = nlp(sentence)
+
+    prompt = f"""
+
+"""
+    # spaCy에서 토큰 데이터 추출
+    tokens = []
+    for token in doc:
+        morph = token.morph.to_dict()
+        tokens.append({
+            "idx": token.idx,
+            "text": token.text,
+            "pos": token.pos_,
+            "tag": token.tag_,
+            "dep": token.dep_,
+            "head": token.head.text,
+            "head_idx": token.head.idx,
+            "tense": morph.get("Tense"),
+            "voice": morph.get("Voice"),
+            "form": morph.get("VerbForm"),
+            "morph": morph,
+            "lemma": token.lemma_,
+            "is_stop": token.is_stop,
+            "is_punct": token.is_punct,
+            "is_alpha": token.is_alpha,
+            "ent_type": token.ent_type_,
+            "is_title": token.is_title,
+            "children": [child.text for child in token.children]
+        })
+
+    # 추론 처리
+    parsed = rule_based_parse(tokens)
+
+    # level 보정
+    parsed = propagate_levels(parsed)
+
+    return parsed
+
+
+# ◎ 저장공간 초기화
 def init_memorys (sentence: str):
 #    memory["characters"] = list(sentence)        # characters에 sentence의 글자 한글자씩 채우기
     memory["symbols_by_level"] = {}  # 문장마다 새로 초기화
     memory["sentence_length"] = len(sentence)  # 도식 길이 추적용 (줄 길이 통일)
-
-
-# ◎ GPT 파스함수
-def gpt_parse(sentence: str):
-    prompt = f"""
-Analyze the following English sentence and return a JSON array.
-
-Each item must include these 10 fields, in this exact order:
-1. "idx" – character index (spaCy token.idx)
-2. "text" – the word itself
-3. "role" – one of the fixed roles (see below)
-4. "combine" – optional; only for main verbs and prepositions
-5. "level" – depth in dependency tree
-
----
-
-🔹 Allowed "role" values and their conditions:
-- subject: dep_ is "nsubj" or "nsubjpass"
-- verb: dep_ is "ROOT" and pos is "VERB", excluding auxiliary verbs (only the main verb per clause)
-- object: dep_ is "dobj" or "obj" - SVO
-- direct object: dep_ is "dobj" and "iobj" also exists - SVOO
-- indirect object: dep_ is "iobj" - SVOO
-- prepositional object: dep_ is "pobj"
-- preposition: dep_ is "prep"
-- conjunction: dep_ is "cc" or "mark"
-- noun subject complement: dep_ is "attr" or "acomp", and POS is NOUN, PROPN, or PRON
-- adjective subject complement: dep_ is "attr" or "acomp", and POS is ADJ
-- noun object complement: dep_ is "xcomp", "oprd", or "ccomp", and POS is NOUN, PROPN, or PRON
-- adjective object complement: dep_ is "xcomp", "oprd", or "ccomp", and POS is ADJ
-
-❌ Do not invent new roles.  
-❌ Do not use labels like "subject noun complement" or "relative pronoun".  
-❌ If a token doesn’t match any of the above, omit the "role" field.
-
----
-
-For all subject and object complements, use these specific role values:
-
-- "noun subject complement" – for subject complements that are nouns, pronouns, or proper nouns
-- "adjective subject complement" – for subject complements that are adjectives
-- "noun object complement" – for object complements that are nouns, pronouns, or proper nouns
-- "adjective object complement" – for object complements that are adjectives
-
-❌ Do not use generic labels like "subject complement" or "object complement".
-
-Use POS tagging (e.g., NOUN, PROPN, PRON, ADJ) to determine whether a complement is a noun or an adjective.
-
----
-
-🔹 When assigning "combine", only include tokens that meet one of the following structural relationships:
-
-- verb → subject complement       (SVC)
-- verb → object                   (SVO)
-- verb → indirect object          (SVOO)
-- indirect object → direct object (SVOO)
-- object → object complement      (SVOC)
-- preposition → prepositional object
-
-Each "combine" must reflect an underline connection in DrawEnglish diagrams.  
-Do NOT include modifiers, adverbs, prepositions, or conjunctions in "combine".
-If none of the above applies, omit the "combine" field entirely.
-
-🔹 Level Rules
-
-Assign a "level" value to each token to indicate its structural depth in the sentence.
-
-- level 0: main clause
-- level 1+: subordinate clauses, infinitive phrases, or verbals
-
-A new level begins when any of the following structural triggers appears:
-- Subordinating conjunctions (e.g., that, because, if)
-- Infinitives (to + verb)
-- Gerunds (verb-ing)
-- Present participles
-- Past participles
-- Relative pronouns (who, which, that)
-- Wh-words (what, why, where, how)
-- Compound wh-words (whoever, whatever, however, etc.)
-
-When a new level begins:
-- The **first word** (trigger) must be assigned level `n - 0.5`
-- All other words in that phrase/clause receive level `n`
-
-This level system is used to separate clauses and reduce visual confusion in sentence diagrams.
-Combine links must only occur within the same level.
-
-> ✅ **Optimization Rule:**  
-> If the sentence contains **no structural triggers**, assign `"level": 0` to **all items**.  
-> You do **not** need to check for deeper structures in that case.
-
-
-🔹 Example format:
-[
-  {{
-    "idx": 5, "text": "elected", "role": "verb", 
-    "combine": [ {{ "text": "him", "role": "object" }}, {{ "text": "president", "role": "object complement" }} ],
-    "level": 0
-  }}
-]
-
-❌ Never assign the role "conjunction" to the word "to".
-
-The word "to" must be classified as one of:
-- an **infinitive marker** (i.e., "to + verb", treated as part of an infinitive phrase)
-- a **preposition** (i.e., followed by a noun or pronoun)
-
-You must decide based on the syntactic structure.
-
-Example:
-- "She wants **to go**." → "to" is part of an infinitive
-- "He walked **to the store**." → "to" is a preposition
-
----
-
-Sentence: "{sentence}"
-
-Return ONLY the raw JSON array.  
-Do not explain anything. Do not include any text outside the array.
-"""
-
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are an expert sentence analyzer."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0,
-        max_tokens=500  # ✅ 명시해주면 좋아
-    )
-
-    try:
-        content = response.choices[0].message.content
-#        print("[GPT RESPONSE]", content)  # GPT 응답 직접 확인
-        return json.loads(content)
-    except Exception as e:
-        print("[ERROR] GPT parsing failed:", e)
-        print("[RAW CONTENT]", content)  # 문제가 된 원본 그대로 출력
-        return []
-
-# GPT에게 문장 전체의 token 위치 정보를 제공하기 위한 함수
-def extract_tokens_for_gpt(text: str):
-    doc = nlp(text)
-    return [
-        {"idx": token.idx, "text": token.text}
-        for token in doc
-    ]
 
 
 # ◎ symbols 메모리에 심볼들 저장하기
@@ -211,7 +269,6 @@ def apply_symbols(parsed):
     for item in parsed:
         idx = item.get("idx", -1)
         role = item.get("role", "").lower()
-        pos = item.get("pos", "").upper()
         level = item.get("level")
 
         if idx < 0 or level is None:
@@ -231,91 +288,112 @@ def apply_symbols(parsed):
                 line[idx] = symbol
 
 
-
 # ◎ memory["symbols"] 내용을 출력하기 위해 만든 함수
-def symbols_to_diagram():
+def symbols_to_diagram(sentence: str):
+    """
+    Returns a visual diagram (string) of current symbols_by_level in memory.
+    Includes:
+    - index line
+    - sentence line
+    - symbol lines by level
+    """
     output_lines = []
+
+    line_length = memory["sentence_length"]
+
+    # ✅ 1. 인덱스 줄
+    index_line = ''.join(str(i % 10) for i in range(line_length))
+    output_lines.append(index_line)
+
+    # ✅ 2. 문장 줄
+    output_lines.append(sentence)
+
+    # ✅ 3. 심볼 줄들 (level 순 정렬)
     for level in sorted(memory["symbols_by_level"]):
         line = ''.join(memory["symbols_by_level"][level])
         output_lines.append(line)
+
     return '\n'.join(output_lines)
 
 
+
 # ◎ 디버깅용 테스트 함수
-def test(sentence: str, use_gpt: bool = True):
-    print(f"\n📘 Sentence: {sentence}")
-    if use_gpt:
-        parsed = gpt_parse(sentence)
-    else:
-        parsed = []  # or mock GPT result for offline test
-    if not parsed:
-        print("❌ No GPT parsing result.")
-    else:
-        print("\n📊 GPT Parsing Result:")
+def test(sentence: str):
+    parsed = gpt_prompt_process(sentence)
+    print("\n📊 Parsed Result:")
     for item in parsed:
+        idx = item.get("idx")
+        text = item.get("text")
+        role = item.get("role")
+        level = item.get("level")
+
+        # combine은 리스트거나 None
         combine = item.get("combine")
         if combine:
-            combine_str = "[" + ', '.join(f"{c.get('text')}:{c.get('role')}" for c in combine) + "]"
+            combine_str = "[" + ', '.join(
+                f"{c.get('text')}:{c.get('role')}" for c in combine
+            ) + "]"
         else:
             combine_str = "None"
-        print(
-            f"● idx({item.get('idx')}), text({item.get('text')}), role({item.get('role')}), "
-            f"combine({combine_str}), level({item.get('level')})"
-        )
 
-    print("\n📘 spaCy Parsing Result:")
-    doc = nlp(sentence)
-    for token in doc:
-        morph = token.morph.to_dict()
-        print(
-            f"● idx({token.idx}), text({token.text}), pos({token.pos_}), tag({token.tag_}), dep({token.dep_}), "
-            f"head({token.head.text}), tense({morph.get('Tense')}), form({morph.get('VerbForm')}), "
-            f"voice({morph.get('Voice')}), morph({morph})"
-        )
+        print(f"● idx({idx}), text({text}), role({role}), combine({combine_str}), level({level})")
 
     init_memorys(sentence)
     apply_symbols(parsed)
-    print("\n🛠 Sentence Diagram:")
-    index_line = ''.join([str(i % 10) for i in range(len(sentence))])
-    print(index_line)
-    print(sentence)
-    print(symbols_to_diagram())
+    print()
+    print(symbols_to_diagram(sentence))
+
 
 
 # 초간단 임시 테스트1 함수
-def test1():
-    print(type(symbols_to_diagram()))
-
 
 
 # ◎ 모듈 외부 사용을 위한 export
 __all__ = [
+    "rule_based_parse",
+    "guess_role",
+    "guess_combine",
+    "guess_level",
+    "propagate_levels",
+    "gpt_prompt_process",
     "init_memorys",
-    "gpt_parse",
     "apply_symbols",
+    "symbols_to_diagram",
     "test"
 ]
+
+# 테스트 문장 자동 실행
+#if __name__ == "__main__":
+#    test("He told her that she is smart.")
+
 
 # ◎ 분석 API 엔드포인트
 @app.post("/analyze", response_model=AnalyzeResponse)  # sentence를 받아 "sentence"와 "diagramming" 리턴
 async def analyze(request: AnalyzeRequest):            # sentence를 받아 다음 처리로 넘김
     init_memorys(request.sentence)                     # 이 함수로 메모리 내용 채움 또는 초기화
-    parsed = gpt_parse(request.sentence)               # GPT의 파싱결과를 parsed에 저장
+    parsed = gpt_prompt_process(request.sentence)               # GPT의 파싱결과를 parsed에 저장
     apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
-    return {"sentence": request.sentence, "diagramming": symbols_to_diagram()}
+    return {"sentence": request.sentence,
+            "diagramming": symbols_to_diagram(request.sentence)}
 
 # ◎ spaCy 파싱 관련
 @app.post("/parse")
 def parse_text(req: ParseRequest):
     doc = nlp(req.text)
     result = []
+
     for token in doc:
         morph = token.morph.to_dict()
         result.append({
-            "idx": token.idx, "text": token.text, "pos": token.pos_, "tag": token.tag_, "dep": token.dep_,
-            "head": token.head.text, "tense": morph.get("Tense"), "form": morph.get("VerbForm"),
-            "voice": morph.get("Voice"), "morph": morph
+            "idx": token.idx, "text": token.text, "pos": token.pos_, "tag": token.tag_,
+            "dep": token.dep_, "head": token.head.text, "head_idx": token.head.idx,
+            "tense": morph.get("Tense"), "form": morph.get("VerbForm"),
+            "voice": morph.get("Voice"), "morph": morph, "lemma": token.lemma_,
+            "is_stop": token.is_stop, "is_punct": token.is_punct, "is_alpha": token.is_alpha,
+            "ent_type": token.ent_type_, "is_title": token.is_title,
+            "children": [child.text for child in token.children]
         })
+
     return {"result": result}
 
 # ◎ 커스텀 OpenAPI JSON 제공 엔드포인트
