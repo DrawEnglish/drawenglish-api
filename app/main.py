@@ -212,7 +212,7 @@ def propagate_levels(parsed_tokens):
     
 
 # ◎ GPT 프롬프트 처리 함수
-def spacy_parsing_backgpt(sentence: str, force_gpt: bool = True):
+def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     doc = nlp(sentence)
 
     prompt = f"""
