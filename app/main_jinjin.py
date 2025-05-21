@@ -211,10 +211,8 @@ def propagate_levels(parsed_tokens):
     return final
     
 
-
-
 # ◎ GPT 프롬프트 처리 함수
-def gpt_prompt_process(sentence: str):
+def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     doc = nlp(sentence)
 
     prompt = f"""
@@ -225,33 +223,64 @@ def gpt_prompt_process(sentence: str):
     for token in doc:
         morph = token.morph.to_dict()
         tokens.append({
-            "idx": token.idx,
-            "text": token.text,
-            "pos": token.pos_,
-            "tag": token.tag_,
-            "dep": token.dep_,
-            "head": token.head.text,
-            "head_idx": token.head.idx,
-            "tense": morph.get("Tense"),
-            "voice": morph.get("Voice"),
-            "form": morph.get("VerbForm"),
-            "morph": morph,
-            "lemma": token.lemma_,
-            "is_stop": token.is_stop,
-            "is_punct": token.is_punct,
-            "is_alpha": token.is_alpha,
-            "ent_type": token.ent_type_,
-            "is_title": token.is_title,
-            "children": [child.text for child in token.children]
+            "idx": token.idx, "text": token.text, "pos": token.pos_,"tag": token.tag_,
+            "dep": token.dep_, "head": token.head.text, "head_idx": token.head.idx,
+            "tense": morph.get("Tense"), "voice": morph.get("Voice"), "form": morph.get("VerbForm"),
+            "morph": morph, "lemma": token.lemma_, "is_stop": token.is_stop,
+            "is_punct": token.is_punct, "is_alpha": token.is_alpha, "ent_type": token.ent_type_,
+            "is_title": token.is_title, "children": [child.text for child in token.children]
         })
 
-    # 추론 처리
+    # 규칙 기반 파싱
     parsed = rule_based_parse(tokens)
+
+    # 조건: 규칙 기반 실패하거나, 강제로 GPT 사용 요청
+    if not parsed or force_gpt:
+        prompt = gpt_parsing_withprompt(tokens)  # 아래 2단계에서 만들 예정
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are an expert sentence analyzer."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=500
+            )
+            content = response.choices[0].message.content
+            return json.loads(content)
+        except Exception as e:
+            print("[ERROR] GPT parsing failed:", e)
+            print("[RAW CONTENT]", content if 'content' in locals() else '[No response]')
+            return []
 
     # level 보정
     parsed = propagate_levels(parsed)
 
     return parsed
+
+# GPT API Parsing(with 프롬프트)을 이용하기 위한 함수
+def gpt_parsing_withprompt(tokens: list) -> str:
+    token_lines = []
+    for t in tokens:
+        token_lines.append(
+            f"● idx({t['idx']}), text({t['text']}), pos({t['pos']}), tag({t['tag']}), dep({t['dep']}), head({t['head']})"
+        )
+    token_block = "\n".join(token_lines)
+
+    prompt = f"""
+Given the following tokenized and POS-tagged English sentence, analyze its syntactic structure.
+
+Token Info:
+{token_block}
+
+Return a JSON list with each token's role in the sentence.
+Each item must have: idx, text, role, and optionally combine/level.
+
+If unsure, return best-guess. Do not return explanations, just the JSON.
+"""
+    return prompt.strip()
 
 
 # ◎ 저장공간 초기화
@@ -319,7 +348,7 @@ def symbols_to_diagram(sentence: str):
 
 # ◎ 디버깅용 테스트 함수
 def test(sentence: str):
-    parsed = gpt_prompt_process(sentence)
+    parsed = spacy_parsing_backgpt(sentence)
     print("\n📊 Parsed Result:")
     for item in parsed:
         idx = item.get("idx")
@@ -395,7 +424,16 @@ def test_all(sentence: str):
 
 
 # 초간단 임시 테스트1 함수
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What is the capital of France?"}
+    ]
+)
 
+def test1():
+    print(response.choices[0].message.content)
 
 # ◎ 모듈 외부 사용을 위한 export
 __all__ = [
@@ -404,7 +442,7 @@ __all__ = [
     "guess_combine",
     "guess_level",
     "propagate_levels",
-    "gpt_prompt_process",
+    "spacy_parsing_backgpt",
     "init_memorys",
     "apply_symbols",
     "symbols_to_diagram",
@@ -420,7 +458,7 @@ __all__ = [
 @app.post("/analyze", response_model=AnalyzeResponse)  # sentence를 받아 "sentence"와 "diagramming" 리턴
 async def analyze(request: AnalyzeRequest):            # sentence를 받아 다음 처리로 넘김
     init_memorys(request.sentence)                     # 이 함수로 메모리 내용 채움 또는 초기화
-    parsed = gpt_prompt_process(request.sentence)               # GPT의 파싱결과를 parsed에 저장
+    parsed = spacy_parsing_backgpt(request.sentence)               # GPT의 파싱결과를 parsed에 저장
     apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
     return {"sentence": request.sentence,
             "diagramming": symbols_to_diagram(request.sentence)}
