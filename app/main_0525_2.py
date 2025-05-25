@@ -86,6 +86,10 @@ def rule_based_parse(tokens):
         if combine:
             t["combine"] = combine
 
+    # ✅ level 재계산
+    for t in result:
+        t["level"] = guess_level(t, result)
+
     # ✅ 보어 기반 object 복구 자동 적용
     result = repair_object_from_complement(result)        
 
@@ -268,140 +272,69 @@ def guess_combine(token, all_tokens):
 
     return combine if combine else None
 
+# level 추론 함수수
+def guess_level(t, all_tokens):
+    text = t["text"].lower()
+    dep = t["dep"]
+    pos = t["pos"]
+    tag = t["tag"]
 
-def assign_level_triggers(parsed):
-    """
-    절 트리거(dep in trigger_deps)가 감지되면,
-    절의 시작 위치에 해당하는 토큰에 level = 0.5 부여
+    # 1️⃣ 종속접속사 (mark): that, because, if, although, when 등
+    if dep == "mark" and text in ["that", "because", "if", "although", "when", "since", "while", "unless"]:
+        return 0.5
 
-    - relcl, advcl, ccomp, xcomp: children 중 가장 앞에 오는 토큰
-    - acl: 트리거 단어 자신
-    """
-    trigger_deps = ["relcl", "acl", "advcl", "ccomp", "xcomp"]
+    # 2️⃣ 관계절: 관계대명사/형용사/부사 (relcl, acl 등)
+    if dep in ["relcl", "acl"]:
+        return 0.5
 
-    for token in parsed:
-        if token["dep"] not in trigger_deps:
-            continue
+    # 3️⃣ 관계사 (관계대명사/부사) 자체
+    if text in ["who", "which", "that", "where", "when", "why", "whose", "whom"]:
+        return 0.5
 
-        dep = token["dep"]
-        token_idx = token["idx"]
+    # 4️⃣ 복합관계사 (whoever, whatever, whichever, wherever 등)
+    if text in ["whoever", "whatever", "whichever", "wherever", "whomever", "whenever", "however"]:
+        return 0.5
 
-        if dep == "acl":
-        # acl은 현재 단어가 절 시작임
-            token["level"] = 0.5
-            continue
+    # 5️⃣ 의문사 (what, where, when 등) + 의문문이 아닌 문장 내부에 있을 때
+    if text in ["what", "who", "which", "where", "when", "why", "how"] and dep in ["nsubj", "dobj", "pobj"]:
+        return 0.5
 
-        # children은 객체가 필요함 (idx 리스트 아님)
-        children = [t for t in parsed if t["head_idx"] == token_idx and t["idx"] != token_idx]
+    # 6️⃣ to부정사
+    if text == "to":
+        for child in t.get("children", []):
+            for tok in all_tokens:
+                if tok["text"] == child and tok["pos"] == "VERB":
+                    return 0.5
 
-        if children:
-            # 절 내 가장 앞에 오는 토큰을 트리거로 판단
-            first_token = min(children, key=lambda x: x["idx"])
-            first_token["level"] = 0.5
+    # 7️⃣ 현재분사 (VBG), 과거분사 (VBN)
+    if tag.endswith("VBG") or tag.endswith("VBN"):
+        return 0.5
 
-    return parsed
+    # 기본값
+    return 0
 
-def assign_level_ranges(parsed):
-    """
-    종속절을 담당하는 dep (relcl, acl, advcl, ccomp, xcomp)에 따라
-    해당 절 범위에 level 값을 부여한다.
-    
-    - relcl, advcl, ccomp, xcomp: 해당 토큰 + children → 범위 계산
-    - acl: 해당 토큰부터 children 포함하여 범위 계산 (자기자신이 연결어)
-    
-    그리고 마지막에 level=None인 토큰들에 대해 level=0을 부여한다.
-    """
 
-    clause_deps = ["relcl", "acl", "advcl", "ccomp", "xcomp"]
 
-    current_level = 1  # 시작은 1부터 (0은 최상위 절용)
+# 트리거 발생시 +0.5 그 다음 단어 level +1
+def propagate_levels(parsed_tokens):
+    final = []
+    current_level = 0  # 기본은 main level 0
 
-    for token in parsed:
-        dep = token.get("dep")
-        if dep not in clause_deps:
-            continue
+    # 각 토큰에 대해 순차적으로 level 부여
+    for i, token in enumerate(parsed_tokens):
+        level = token.get("level", 0)
 
-        token_idx = token["idx"]
-        clause_tokens = [token]  # 시작은 자기 자신 포함
-
-        # ✅ children도 절 범위에 포함
-        children = [t for t in parsed if t["head_idx"] == token_idx]
-        clause_tokens.extend(children)
-
-        # ✅ 절 범위 시작 ~ 끝 계산
-        start_idx = min(t["idx"] for t in clause_tokens)
-        end_idx = max(t["idx"] for t in clause_tokens)
-
-        # ✅ level 부여
-        for t in parsed:
-            if start_idx <= t["idx"] <= end_idx:
-                t["level"] = current_level
-
-        # ✅ 연결어에는 .5 추가
-        if dep == "acl":
-            token["level"] = current_level - 0.5  # 연결어는 바로 이전 절에서 이어짐
+        # 트리거가 감지되면: 0.5 → 1.5 → 2.5 → ...
+        if isinstance(level, float) and level % 1 == 0.5:
+            token["level"] = current_level + 0.5
+            current_level += 1  # 다음 절로 넘어가므로 +1
         else:
-            # 연결어 후보: 절 범위 앞 단어 중 연결사 역할
-            connector = min(clause_tokens, key=lambda x: x["idx"])
-            connector["level"] = current_level - 0.5
+            token["level"] = current_level  # 일반 토큰은 현재 level 유지
 
-        current_level += 1
+        final.append(token)
 
-    # ✅ 최상위 절 level=None → level=0 으로 설정
-    for t in parsed:
-        if t.get("level") is None:
-            t["level"] = 0
+    return final
 
-    return parsed
-
-def repair_level_within_prepositional_phrases(parsed):
-    """
-    prep의 목적어 pobj를 찾을 때:
-    - dep == 'pobj'
-    - head_idx == prep.idx
-    - prep의 실제 children에 포함
-    
-    세 가지 모두 만족해야 함.
-    
-    level이 다르면 prep 기준으로 보정.
-    """
-
-    for prep in parsed:
-        if prep.get("dep") != "prep":
-            continue
-
-        prep_level = prep.get("level")
-        if prep_level is None:
-            continue
-
-        # ✅ prep의 children 목록 확보
-        children = [t for t in parsed if t.get("head_idx") == prep["idx"]]
-        child_ids = {t["idx"] for t in children}
-
-        # ✅ 모든 토큰 중에서 pobj 후보 찾기 (이중 조건 적용)
-        pobj_candidates = [
-            t for t in parsed
-            if t.get("dep") == "pobj"
-            and t.get("head_idx") == prep["idx"]
-            and t["idx"] in child_ids
-        ]
-
-        for pobj in pobj_candidates:
-            pobj_level = pobj.get("level")
-
-            # level이 같으면 보정 필요 없음
-            if pobj_level == prep_level:
-                continue
-
-            # ✅ prep ~ pobj 범위 추출
-            start = min(prep["idx"], pobj["idx"])
-            end = max(prep["idx"], pobj["idx"])
-
-            for t in parsed:
-                if start <= t["idx"] <= end:
-                    t["level"] = prep_level
-
-    return parsed
 
 
 # ◎ GPT 프롬프트 처리 함수
@@ -448,19 +381,8 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
             print("[RAW CONTENT]", content if 'content' in locals() else '[No response]')
             return []
 
-    # ✅ 절 분기 트리거 부여 (0.5 level)
-    parsed = assign_level_triggers(parsed)
-
-    print("\n📍 Level trigger check")
-    for t in parsed:
-        if "level" in t and isinstance(t["level"], float):
-            print(f"→ TRIGGER: {t['text']} (level: {t['level']})")
-
-    # level 분기 전파
-    parsed = assign_level_ranges(parsed)
-
-    # ✅ 📍 level 보정: prep-pobj 레벨 통일
-    parsed = repair_level_within_prepositional_phrases(parsed)
+    # level 보정
+    parsed = propagate_levels(parsed)
 
     return parsed
 
@@ -549,10 +471,37 @@ def symbols_to_diagram(sentence: str):
     return '\n'.join(output_lines)
 
 
+
+# ◎ 디버깅용 테스트 함수
 def t(sentence: str):
+    parsed = spacy_parsing_backgpt(sentence)
+    parsed = propagate_levels(parsed)
+    print("\n📊 Parsed Result:")
+    for item in parsed:
+        idx = item.get("idx")
+        text = item.get("text")
+        role = item.get("role")
+        level = item.get("level")
+
+        # combine은 리스트거나 None
+        combine = item.get("combine")
+        if combine:
+            combine_str = "[" + ', '.join(
+                f"{c.get('text')}:{c.get('role')}" for c in combine
+            ) + "]"
+        else:
+            combine_str = "None"
+
+        print(f"● idx({idx}), text({text}), role({role}), combine({combine_str}), level({level})")
+
+    print(f"\n🛠 Diagram:")
+    init_memorys(sentence)
+    apply_symbols(parsed)
+    print(symbols_to_diagram(sentence))
+
+def t1(sentence: str):
     print(f"\n📘 Sentence: {sentence}")
     doc = nlp(sentence)
-    parsed = spacy_parsing_backgpt(sentence)
     morph_data = []  # 전체 토큰 리스트 저장
 
     # spaCy에서 full 토큰 추출
@@ -566,8 +515,12 @@ def t(sentence: str):
             "morph": morph, "lemma": token.lemma_,
             "is_stop": token.is_stop, "is_punct": token.is_punct, "is_alpha": token.is_alpha,
             "ent_type": token.ent_type_, "is_title": token.is_title,
-            "children": [child.idx for child in token.children]
+            "children": [child.text for child in token.children]
         })
+
+    # 구조 추론
+    parsed = rule_based_parse(morph_data)
+    parsed = propagate_levels(parsed)
 
     print("\n📊 Full Token Info with Annotations:")
     for token in morph_data:
@@ -607,11 +560,9 @@ def t(sentence: str):
 __all__ = [
     "rule_based_parse",
     "guess_role",
-    "assign_svoc_complement_as_name",
-    "repair_object_from_complement",
     "guess_combine",
-    "assign_level_triggers",
-    "assign_level_ranges",
+    "guess_level",
+    "propagate_levels",
     "spacy_parsing_backgpt",
     "gpt_parsing_withprompt",
     "init_memorys",

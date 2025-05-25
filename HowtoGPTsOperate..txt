@@ -11,20 +11,94 @@ class ParseRequest(BaseModel):     # spaCy 관련 설정
 
 # 이 선언은 전역메모리(dict) 선언
 memory = {                         
-    "characters": [],
-    "symbols": [],
-    "char_lower": "",              # characters, symbols, word_position은 list, char_lower는 string
-    "word_positions": []
+    "symbols_by_level": {}
 }
 ☞ init_memorys 함수에서 내용 채움 또는 초기화
 
-parsed = gpt_parse(request.sentence)  # parsed는 list[dict] 디셔너리들의 리스트
+role_to_symbol = {
+    "verb": "○",
+    "object": "□",
+    "indirect object": "□",
+    "direct object": "□",
+    "prepositional object": "□",
+    "preposition": "▽",
+    "conjunction": "◇",
+    "noun subject complement": "[",
+    "adjective subject complement": "(",
+    "noun object complement": "[",
+    "adjective object complement": "("
+}
 
-diagram : memory["symbols"]를 재가공해서 써먹기 위한 별도의 list 선언
-* symbols_to_diagram(), symbols_relocation(diagram)에서 쓰는 지역변수
+SVOC_as_name = {
+    "name", "appoint", "call", "elect", "consider", "make"
+    # 일부 make도 포함, He considered her a friend.
+}
+
+noSubjectComplementVerbs = {
+    "live", "arrive", "go", "come", "sleep", "die", "run", "walk", "travel", "exist", "happen"
+}
+
+noObjectVerbs = {
+    "die", "arrive", "exist", "go", "come", "vanish", "fall", "sleep", "occur"
+}
 
 
 
+def rule_based_parse(tokens):
+  role = guess_role(t, tokens)
+  result = assign_svoc_complement_as_name(result)
+  combine = guess_combine(t, result)
+  result = repair_object_from_complement(result)     
+
+def guess_role(t, all_tokens=None): 
+
+def assign_svoc_complement_as_name(parsed):
+
+def repair_object_from_complement(parsed):
+
+def guess_combine(token, all_tokens):
+
+def assign_level_triggers(parsed):
+
+def assign_level_ranges(parsed_tokens):
+
+def repair_level_within_prepositional_phrases(parsed):
+
+def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
+  doc = nlp(sentence)
+  parsed = rule_based_parse(tokens)
+  prompt = gpt_parsing_withprompt(tokens)
+  parsed = assign_level_triggers(parsed)
+  parsed = assign_level_ranges(parsed)
+
+def gpt_parsing_withprompt(tokens: list) -> str:
+
+def init_memorys (sentence: str):
+
+def apply_symbols(parsed):
+  symbol = role_to_symbol.get(role)
+
+def symbols_to_diagram(sentence: str):
+
+def t(sentence: str):
+  doc = nlp(sentence)
+  parsed = spacy_parsing_backgpt(sentence)
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+sync def analyze(request: AnalyzeRequest):
+  init_memorys(request.sentence)
+  parsed = spacy_parsing_backgpt(request.sentence)
+  apply_symbols(parsed)
+
+@app.post("/parse")
+def parse_text(req: ParseRequest):
+  doc = nlp(req.text)
+
+@app.get("/custom-openapi.json", include_in_schema=False)
+async def serve_openapi():
+
+@app.get("/ping")
+async def ping():
 
 
 ===================================================
