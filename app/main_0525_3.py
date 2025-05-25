@@ -405,50 +405,45 @@ def repair_level_within_prepositional_phrases(parsed):
 
 
 def apply_modal_bridge_symbols_all_levels(parsed, sentence):
+    """
+    DrawEnglish 도식에서:
+    - 각 level(절)마다 조동사 ∩ 표시
+    - 조동사~본동사 사이 점선 .... 으로 채움
+    - 결과는 memory["symbols_by_level"][N] 에 바로 병합됨
+    """
+
     modals = {"will", "would", "shall", "should", "can", "could", "may", "might", "must"}
     line_length = memory["sentence_length"]
-    levels = set(t.get("level") for t in parsed if t.get("level") is not None)
 
+    # 모든 level 순회
+    levels = set(t.get("level") for t in parsed if t.get("level") is not None)
     for level in levels:
         line = memory["symbols_by_level"].setdefault(level, [" " for _ in range(line_length)])
 
-        # ✅ POS=AUX and DEP=aux 조건
+        # 이 level에 있는 조동사 1개만 처리
         modal_token = next(
-            (t for t in parsed if t.get("pos") == "AUX" and t.get("dep") in {"aux", "auxpass"} and t.get("level") == level),
+            (t for t in parsed if t["lemma"].lower() in modals and t.get("level") == level and t["pos"] == "AUX"),
             None
         )
         if not modal_token:
-            continue
-
-        # ✅ 마지막 main verb
-        main_verbs = [t for t in parsed if t.get("role") == "verb" and t.get("level") == level]
-        if not main_verbs:
-            continue
-        verb_token = main_verbs[-1]
+            continue  # 조동사 없으면 skip
 
         modal_idx = modal_token["idx"]
-        verb_idx = verb_token["idx"]
+        if line[modal_idx] == " ":
+            line[modal_idx] = "∩"
+
+        # 본동사 추출 (같은 level의 마지막 verb)
+        main_verbs = [
+            t for t in parsed if t.get("role") == "verb" and t.get("level") == level
+        ]
+        if not main_verbs:
+            continue
+
+        verb_idx = main_verbs[-1]["idx"]
         start, end = sorted([modal_idx, verb_idx])
-
-        # ✅ 의문문 여부: 사이에 subject 존재
-        has_subject_between = any(
-            t.get("role") == "subject" and start < t["idx"] < end
-            for t in parsed
-        )
-
-        # ✅ 표시: ∩ or .
-        if has_subject_between:
-            if line[modal_idx] == " ":
-                line[modal_idx] = "∩"
-        else:
-            if line[modal_idx] == " ":
-                line[modal_idx] = "."
-
-        # ✅ 조동사 ~ 본동사 사이 점선
         for i in range(start + 1, end):
             if line[i] == " ":
                 line[i] = "."
-
 
 # 아무 심볼도 안 찍힌 줄이면 memory에서 아예 제거
 def clean_empty_symbol_lines():

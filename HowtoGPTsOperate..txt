@@ -64,6 +64,10 @@ def assign_level_ranges(parsed_tokens):
 
 def repair_level_within_prepositional_phrases(parsed):
 
+def apply_modal_bridge_symbols_all_levels(parsed, sentence):
+
+def clean_empty_symbol_lines():
+
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
   doc = nlp(sentence)
   parsed = rule_based_parse(tokens)
@@ -79,10 +83,17 @@ def apply_symbols(parsed):
   symbol = role_to_symbol.get(role)
 
 def symbols_to_diagram(sentence: str):
+  apply_modal_bridge_symbols_all_levels(parsed, sentence)
+  clean_empty_symbol_lines
 
 def t(sentence: str):
   doc = nlp(sentence)
   parsed = spacy_parsing_backgpt(sentence)
+  print("🛠 Diagram:")
+  init_memorys(sentence)
+  apply_symbols(parsed)
+  apply_modal_bridge_symbols_all_levels(parsed, sentence)
+  print(symbols_to_diagram(sentence))
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 sync def analyze(request: AnalyzeRequest):

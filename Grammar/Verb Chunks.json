@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "system": "DrawEnglish",
+    "coreModel": "34형 동사덩어리 체계",
+    "tenseModel": "2시제 원칙",
+    "description": "영어 동사 구조를 완료·진행·수동(3P) 조합과 현재/과거 2시제로 단일화한 시스템"
+  },
+  "tense": {
+    "type": "2시제",
+    "recognized": ["현재", "과거"],
+    "notTense": ["완료", "진행", "수동", "will", "would", "should", "could", "might", "must"],
+    "rules": [
+      "시제는 동사덩어리 맨 앞 요소만 가진다.",
+      "절마다 시제는 반드시 1번만 나타난다.",
+      "완료·진행·수동은 시제가 아니라 동사 구조 조합이다."
+    ]
+  },
+  "verbChunks": {
+    "baseCombinations": 8,
+    "modalityGroups": [
+      { "type": "현재형 동사", "examples": ["call", "has called", "is calling"] },
+      { "type": "과거형 동사", "examples": ["called", "had called", "was calling"] },
+      { "type": "1형 조동사", "examples": ["will call", "will have called"] },
+      { "type": "2형 조동사", "examples": ["would call", "would have called"] }
+    ],
+    "doModal": {
+      "forms": ["do", "does", "did"],
+      "function": ["부정", "의문"],
+      "rule": "다른 조동사와 혼용되지 않으며, 기본형 동사와만 결합한다.",
+      "note": "DrawEnglish에서는 do 조동사를 do옥고다이(독고다이)라고 부른다.",
+      "splitByTense": true
+    },
+    "totalCount": 34
+  },
+  "constructionRules": {
+    "3P_order": ["완료", "진행", "수동"],
+    "validCombinations": [
+      "완", "완진", "완수", "완진수",
+      "진", "진수", "수",
+      "기본형"
+    ],
+    "structureExamples": {
+      "완진수": "have been being written",
+      "진수": "be being written",
+      "완진": "have been calling"
+    },
+    "visualRule": "각 동사덩어리는 완진수 순서대로 조립되고, 중간에 순서 바꿀 수 없다."
+  },
+  "negationAndQuestions": {
+    "rule": "시제를 가진 맨 앞 요소에만 부정(not)과 의문어순 이동이 발생한다.",
+    "negation": {
+      "pattern": "조동사/시제보유자 + not + 나머지",
+      "examples": ["has not been calling", "did not go"]
+    },
+    "question": {
+      "pattern": "조동사/시제보유자 + 주어 + 나머지",
+      "examples": ["Has she been calling?", "Did you see it?"]
+    }
+  },
+  "gptTips": {
+    "formatSuggestions": [
+      "🔹 조합명: 현재형 예 / 과거형 예",
+      "표 형식: 조합 | 현재형 | 과거형 | 설명",
+      "마크다운 강조: 동사덩어리 내 핵심 시제 요소에 **볼드** 처리"
+    ],
+    "recommendedUseCases": [
+      "사용자에게 '이 동사 덩어리는 34개 중 몇 번입니다'라고 설명",
+      "GPTs에서 구조 분석 결과를 이 이론에 맞춰 포맷",
+      "학습자 요청 시 전체 조합 리스트 반환"
+    ]
+  }
+}
