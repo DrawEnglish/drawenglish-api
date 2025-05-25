@@ -464,38 +464,6 @@ def clean_empty_symbol_lines():
         del memory["symbols_by_level"][level]
 
 
-def set_tense_aspect_voice_symbols(tokens, sentence_length):
-    line = [" " for _ in range(sentence_length)]
-
-    verb_chain = [t for t in tokens if t["pos"] in {"AUX", "VERB"}]
-    if not verb_chain:
-        return line
-
-    first = verb_chain[0]
-    last = verb_chain[-1]
-    tense = last.get("morph", {}).get("Tense", ["Pres"])[0].lower()
-
-    # ① 시제
-    line[first["idx"]] = ">" if tense == "past" else "|"
-
-    # ② 완료
-    for t in verb_chain:
-        if t["lemma"] == "have":
-            line[t["idx"]] = "P"
-
-    # ③ 진행
-    for t in verb_chain:
-        if t["lemma"] == "be" and t.get("tag") == "VBG":
-            line[t["idx"]] = "i"
-
-    # ④ 수동
-    for t in verb_chain:
-        if t["lemma"] == "be" and t.get("tag") == "VBN":
-            line[t["idx"]] = "^"
-
-    return line
-
-
 # ◎ GPT 프롬프트 처리 함수
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     doc = nlp(sentence)
@@ -618,22 +586,20 @@ def symbols_to_diagram(sentence: str):
     output_lines = []
 
     line_length = memory["sentence_length"]
-    parsed = memory.get("parsed")
-
-    # 📌 tense/aspect/voice 라인 먼저 추가
-    if parsed:
-        tav_line = set_tense_aspect_voice_symbols(parsed, line_length)
-        output_lines.append("".join(tav_line))
-
-    # 인덱스 & 원문
     index_line = ''.join(str(i % 10) for i in range(line_length))
+    output_lines.append(index_line)
     output_lines.append(sentence)
 
+    parsed = memory.get("parsed")
+
+    # ✅ bridge line 먼저
     if parsed:
         apply_modal_bridge_symbols_all_levels(parsed, sentence)
 
+    # ✅ 빈 레벨 줄 제거
     clean_empty_symbol_lines()
 
+    # ✅ 그 다음 symbol 줄들 (level 0부터)
     for level in sorted(memory["symbols_by_level"]):
         output_lines.append(''.join(memory["symbols_by_level"][level]))
 
@@ -642,42 +608,29 @@ def symbols_to_diagram(sentence: str):
 
 def t(sentence: str):
     print(f"\n📘 Sentence: {sentence}")
-
-    # ✅ 메모리 먼저 초기화 (문장 길이 기반 설정 포함)
-    init_memorys(sentence)
-
-    # ✅ spaCy 파싱 + 역할 분석
+    doc = nlp(sentence)
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
+    morph_data = []  # 전체 토큰 리스트 저장
 
-    # ✅ 동사덩어리 분석: 시제/상/태 출력
-    verb_chain = [t for t in parsed if t["pos"] in {"AUX", "VERB"}]
-    if verb_chain:
-        first = verb_chain[0]
-        last = verb_chain[-1]
-        tense = last.get("morph", {}).get("Tense", ["Pres"])[0].lower()
-
-        print(f"\n⏳ Verb Chain:")
-        print("  → ", " → ".join(t['text'] for t in verb_chain))
-        print(f"  Tense: {tense.upper()}  (based on main verb '{last['text']}')")
-        print(f"  Tense mark position: idx({first['idx']})")
-
-        for t in verb_chain:
-            tag = t.get("tag")
-            if t["lemma"] == "have":
-                print(f"  ✔ Perfect (P) at idx({t['idx']}) [{t['text']}]")
-            if t["lemma"] == "be" and tag == "VBG":
-                print(f"  ✔ Progressive (i) at idx({t['idx']}) [{t['text']}]")
-            if t["lemma"] == "be" and tag == "VBN":
-                print(f"  ✔ Passive (^) at idx({t['idx']}) [{t['text']}]")
-
-    # ✅ morph 상세 출력
-    print("\n📊 Full Token Info with Annotations:")
-    doc = nlp(sentence)
+    # spaCy에서 full 토큰 추출
     for token in doc:
         morph = token.morph.to_dict()
-        idx = token.idx
-        text = token.text
+        morph_data.append({
+            "idx": token.idx, "text": token.text, "pos": token.pos_,
+            "tag": token.tag_, "dep": token.dep_, "head": token.head.text,
+            "head_idx": token.head.idx, "tense": morph.get("Tense"), "aspect": morph.get("Aspect"),
+            "form": morph.get("VerbForm"), "voice": morph.get("Voice"),
+            "morph": morph, "lemma": token.lemma_,
+            "is_stop": token.is_stop, "is_punct": token.is_punct, "is_alpha": token.is_alpha,
+            "ent_type": token.ent_type_, "is_title": token.is_title,
+            "children": [child.idx for child in token.children]
+        })
+
+    print("\n📊 Full Token Info with Annotations:")
+    for token in morph_data:
+        idx = token["idx"]
+        text = token["text"]
         role = next((t.get("role") for t in parsed if t["idx"] == idx), None)
         combine = next((t.get("combine") for t in parsed if t["idx"] == idx), None)
         level = next((t.get("level") for t in parsed if t["idx"] == idx), None)
@@ -687,18 +640,20 @@ def t(sentence: str):
             if combine else "None"
         )
 
-        child_texts = [child.text for child in token.children]
+        child_texts = [t['text'] for t in parsed if t['idx'] in token.get('children', [])]
 
         print(f"● idx({idx}), text({text}), role({role}), combine({combine_str}), level({level})")
-        print(f"  POS({token.pos_}), DEP({token.dep_}), TAG({token.tag_}), HEAD({token.head.text})")
-        print(f"  lemma({token.lemma_}), is_stop({token.is_stop}), is_punct({token.is_punct}), is_title({token.is_title})")
-        print(f"  morph({morph})")
-        print(f"  children({child_texts})")
+        print(f"  POS({token['pos']}), DEP({token['dep']}), TAG({token['tag']}), HEAD({token['head']})")
+        print(f"  lemma({token['lemma']}), is_stop({token['is_stop']}), is_punct({token['is_punct']}), is_title({token['is_title']})")
+        print(f"  morph({token['morph']})")
+        print(f"  children({child_texts}")
         print("")
 
-    # ✅ 도식화 및 출력
-    apply_symbols(parsed)
+    # 도식 출력
     print("🛠 Diagram:")
+    init_memorys(sentence)
+    apply_symbols(parsed)
+    apply_modal_bridge_symbols_all_levels(parsed, sentence)
     print(symbols_to_diagram(sentence))
 
 
