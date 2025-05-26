@@ -597,7 +597,7 @@ def symbols_to_diagram(sentence: str):
         apply_modal_bridge_symbols_all_levels(parsed, sentence)
 
     # ✅ 빈 레벨 줄 제거
-    clean_empty_symbol_lines()
+    # clean_empty_symbol_lines()
 
     # ✅ 그 다음 symbol 줄들 (level 0부터)
     for level in sorted(memory["symbols_by_level"]):

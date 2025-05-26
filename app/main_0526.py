@@ -60,7 +60,6 @@ class AnalyzeRequest(BaseModel):   # 사용자가 보낼 요청(sentence) 정의
 class AnalyzeResponse(BaseModel):  # 응답으로 돌려줄 데이터(sentence, diagramming) 정의
     sentence: str
     diagramming: str               # "     ○______□__[         "
-    verb_attribute: dict
 
 class ParseRequest(BaseModel):     # spaCy 관련 설정
     text: str
@@ -465,54 +464,36 @@ def clean_empty_symbol_lines():
         del memory["symbols_by_level"][level]
 
 
-def set_verb_attribute(parsed):
-    """
-    parsed 데이터를 기반으로 시제, 상, 태 정보를 추출해서 memory["verb_attribute"]에 저장.
-    """
-    verb_chain = [t for t in parsed if t["pos"] in {"AUX", "VERB"}]
+def set_tense_aspect_voice_symbols(tokens, sentence_length):
+    line = [" " for _ in range(sentence_length)]
+
+    verb_chain = [t for t in tokens if t["pos"] in {"AUX", "VERB"}]
     if not verb_chain:
-        memory["verb_attribute"] = {}
-        return
+        return line
 
     first = verb_chain[0]
     last = verb_chain[-1]
-    morph = last.get("morph", {})
-    tense = morph.get("Tense", ["Pres"])[0].lower()  # default = pres if missing
+    tense = last.get("morph", {}).get("Tense", ["Pres"])[0].lower()
 
-    symbol_map = {}
-    aspect = []
-    voice = None
+    # ① 시제
+    line[first["idx"]] = ">" if tense == "past" else "|"
 
-    # 시제
-    symbol_map[first["idx"]] = ">" if tense == "past" else "|"
-
-    # 완료
+    # ② 완료
     for t in verb_chain:
         if t["lemma"] == "have":
-            symbol_map[t["idx"]] = "P"
-            aspect.append("perfect")
+            line[t["idx"]] = "P"
 
-    # 진행
+    # ③ 진행
     for t in verb_chain:
         if t["lemma"] == "be" and t.get("tag") == "VBG":
-            symbol_map[t["idx"]] = "i"
-            aspect.append("progressive")
+            line[t["idx"]] = "i"
 
-    # 수동
+    # ④ 수동
     for t in verb_chain:
         if t["lemma"] == "be" and t.get("tag") == "VBN":
-            symbol_map[t["idx"]] = "^"
-            voice = "passive"
+            line[t["idx"]] = "^"
 
-    memory["verb_attribute"] = {
-        "tense": tense,
-        "aspect": aspect,
-        "voice": voice,
-        "main_verb": last["text"],
-        "verb_chain": [t["text"] for t in verb_chain],
-        "tense_position": first["idx"],
-        "symbol_map": symbol_map
-    }
+    return line
 
 
 # ◎ GPT 프롬프트 처리 함수
@@ -572,8 +553,6 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
 
     # ✅ 📍 level 보정: prep-pobj 레벨 통일
     parsed = repair_level_within_prepositional_phrases(parsed)
-
-    set_verb_attribute(parsed)
 
     return parsed
 
@@ -641,22 +620,19 @@ def symbols_to_diagram(sentence: str):
     line_length = memory["sentence_length"]
     parsed = memory.get("parsed")
 
-    # ✅ 새 방식으로 시제/상/태 symbol map 출력
-    tav_line = [" " for _ in range(line_length)]
-    symbol_map = memory.get("verb_attribute", {}).get("symbol_map", {})
-    for idx, symbol in symbol_map.items():
-        if 0 <= idx < line_length:
-            tav_line[idx] = symbol
-    output_lines.append("".join(tav_line))  # ← 첫 줄로 출력
+    # 📌 tense/aspect/voice 라인 먼저 추가
+    if parsed:
+        tav_line = set_tense_aspect_voice_symbols(parsed, line_length)
+        output_lines.append("".join(tav_line))
 
-    # ✅ 문장 텍스트 줄
+    # 인덱스 & 원문
+    index_line = ''.join(str(i % 10) for i in range(line_length))
     output_lines.append(sentence)
 
-    # ✅ bridge(∩) 및 ○□ 심볼 출력
     if parsed:
         apply_modal_bridge_symbols_all_levels(parsed, sentence)
 
-#   clean_empty_symbol_lines()
+    clean_empty_symbol_lines()
 
     for level in sorted(memory["symbols_by_level"]):
         output_lines.append(''.join(memory["symbols_by_level"][level]))
@@ -694,11 +670,6 @@ def t(sentence: str):
                 print(f"  ✔ Progressive (i) at idx({t['idx']}) [{t['text']}]")
             if t["lemma"] == "be" and tag == "VBN":
                 print(f"  ✔ Passive (^) at idx({t['idx']}) [{t['text']}]")
-
-    # ⏳ Verb Symbol Map 확인 (선택적 디버깅)
-    print("\n🧩 Verb Symbol Map:")
-    for idx, symbol in memory.get("verb_attribute", {}).get("symbol_map", {}).items():
-        print(f"  idx({idx}) → {symbol}")
 
     # ✅ morph 상세 출력
     print("\n📊 Full Token Info with Annotations:")
@@ -764,9 +735,7 @@ async def analyze(request: AnalyzeRequest):            # sentence를 받아 다�
     memory["parsed"] = parsed
     apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
     return {"sentence": request.sentence,
-            "diagramming": symbols_to_diagram(request.sentence),
-            "verb_attribute": memory.get("verb_attribute", {})
-    }
+            "diagramming": symbols_to_diagram(request.sentence)}
 
 # ◎ spaCy 파싱 관련
 @app.post("/parse")

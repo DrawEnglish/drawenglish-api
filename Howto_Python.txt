@@ -13,10 +13,16 @@ git push origin main
 
 git pull origin main  # Git 리모트 변경사항을 로컬PC에 병합
 
+cd c:\drawenglish-api
+venv\Scripts\activate
+
 python
 from app.main import t
 
 t("")
+
+The man, who as well, left the room.
+
 
 t1("")
 
