@@ -17,11 +17,9 @@ cd c:\drawenglish-api
 venv\Scripts\activate
 
 python
-from app.main import t
+from app.main import t, t1
 
-t("")
-
-The man, who as well, left the room.
+t("The man, who as well, left the room.")
 
 
 t1("")

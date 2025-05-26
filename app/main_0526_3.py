@@ -39,19 +39,9 @@ role_to_symbol = {
     "adjective object complement": "("
 }
 
-# 📘 보어가 **명사만** 가능한 SVOC 동사
-SVOC_noun_only = {
-    "name", "appoint", "elect", "dub", "label", "christen", "nominate"
-}
-
-# 📙 보어가 **형용사만** 가능한 SVOC 동사
-SVOC_adj_only = {
-    "find", "keep", "leave", "consider"  # 일부 보어 명사도 가능하긴 하지만 거의 형용사 우위
-}
-
-# 📗 보어가 **명사/형용사 둘 다** 가능한 SVOC 동사
-SVOC_both = {
-    "make", "call", "consider", "declare", "paint", "think", "judge"
+SVOC_as_name = {
+    "name", "appoint", "call", "elect", "consider", "make"
+    # 일부 make도 포함, He considered her a friend.
 }
 
 noSubjectComplementVerbs = {
@@ -89,7 +79,13 @@ def rule_based_parse(tokens):
 
     # 'name'과 같은 동사가 있는 SVOC구조에서 목적보어를 잘못 태깅하는 것 보정 함수
     result = tokens  # 기존 tokens을 수정하며 계속 사용
-    result = assign_noun_complement_for_SVOC_noun_only(result)
+    result = assign_svoc_complement_as_name(result)
+
+    # ✅ combine 재계산
+    for t in result:
+        combine = guess_combine(t, result)
+        if combine:
+            t["combine"] = combine
 
     # ✅ 보어 기반 object 복구 자동 적용
     result = repair_object_from_complement(result)        
@@ -172,38 +168,16 @@ def guess_role(t, all_tokens=None):  # all_tokens 추가 필요
     # ✅ 그 외는 DrawEnglish 도식에서 사용 안 함
     return None
 
-# dep가 dative여서 indiret object가 있는데, 뒤쪽에 direct object role이 없는 경우 보정
-def recover_direct_object_from_indirect(parsed):
+
+def assign_svoc_complement_as_name(parsed):
     """
-    SVOO 문장에서 indirect object에 대해 appos 구조의 direct object를 복원
-    """
-    for token in parsed:
-        if token.get("role") == "indirect object":
-            token_idx = token.get("idx")
-
-            for child in parsed:
-                if (
-                    child.get("head_idx") == token_idx and
-                    child.get("dep") == "appos" and
-                    child.get("pos") in {"NOUN", "PROPN"}
-                ):
-                    child["role"] = "direct object"
-                    break
-
-    return parsed
-
-
-# 목적보어로 명사만 취하는 동사 사용 문장에서 목적보어를 잘못 태깅하는 것 보정
-# 그 후 아래 repair_object_from_complement()함수를 통해 목적어를 보정함
-def assign_noun_complement_for_SVOC_noun_only(parsed):
-    """
-    SVOC 구조 동사들(SVOC_noun_only 사전에 등록)의 목적보어가 spaCy에서 잘못 태깅된 경우
-    noun object complement로 1회 보정 단, object 이후의 단어만 대상으로 한다.
+    SVOC 구조 동사들(SVOC_as_name 사전에 등록)의 목적보어가 spaCy에서 잘못 태깅된 경우 noun object complement로 1회 보정
+    단, object 이후의 단어만 대상으로 한다.
     """
     applied = False
 
     for i, token in enumerate(parsed):
-        if token.get("lemma") in SVOC_noun_only and token.get("pos") in ["VERB", "AUX"]:
+        if token.get("lemma") in SVOC_as_name and token.get("pos") in ["VERB", "AUX"]:
             verb_idx = token["idx"]
 
             # object 확인
@@ -230,90 +204,17 @@ def assign_noun_complement_for_SVOC_noun_only(parsed):
 
     return parsed
 
-# 목적보어로 형용사만 또는 형용사/명사를 모두 취하는 동사 사용 문장에서 목적보어를 잘못 태깅하는 것 보정
-# 그 후 아래 repair_object_from_complement()함수를 통해 목적어를 보정함
-# 예: "She painted the wall green."
-def assign_adj_object_complement_when_compound_object(parsed):
-    for verb in parsed:
-        if verb.get("pos") != "VERB":
-            continue
 
-        verb_lemma = verb.get("lemma")
-        if verb_lemma not in SVOC_adj_only and verb_lemma not in SVOC_both:
-            continue
-
-        verb_idx = verb["idx"]
-
-        # 보어 후보: VERB의 자식 중 dep=obj, pos=ADJ
-        for t in parsed:
-            if (
-                t.get("head_idx") == verb_idx and
-                t.get("dep") in ["dobj", "obj"] and
-                t.get("pos") == "ADJ"
-            ):
-                # ✅ 이 ADJ의 children에 compound가 붙어 있으면 보정 대상
-                children = [c for c in parsed if c.get("head_idx") == t["idx"]]
-                has_compound = any(
-                    c.get("dep") == "compound" and c.get("pos") == "NOUN"
-                    for c in children
-                )
-                if has_compound:
-                    t["role"] = "adjective object complement"
-
-    return parsed
-
-# SVOC_both 동사에 속해 있고, 뒤에 role(object)가 있고, 그 뒤에 advcl, ADJ 이면서 HEAD가 object와 같을때
-# adjective object complement로 보정.  예: He painted the kitchen walls blue.
-def assign_adj_complement_for_advcl_adjective(parsed):
-    """
-    spaCy가 형용사 목적보어를 advcl로 잘못 태깅했을 때 보정
-    예: "He painted the walls blue."
-    """
-    for verb in parsed:
-        if verb.get("pos") != "VERB":
-            continue
-        if verb.get("lemma") not in SVOC_both:
-            continue
-
-        verb_idx = verb["idx"]
-
-        # 1. object 있는지 먼저 확인
-        obj = next(
-            (t for t in parsed if t.get("head_idx") == verb_idx and t.get("role") in ["object", "direct object"]),
-            None
-        )
-        if not obj:
-            continue
-
-        obj_idx = obj["idx"]
-
-        # 2. object 이후 등장한 형용사 중 특정 조건을 만족하면 보어로 간주
-        for t in parsed:
-            if (
-                t.get("idx") > obj_idx and
-                t.get("head_idx") == verb_idx and
-                t.get("dep") == "advcl" and
-                t.get("pos") == "ADJ"
-            ):
-                t["role"] = "adjective object complement"
-    return parsed
-
-
-# 목적보어(object complement)가 있는데, 앞쪽 목적어를 nsubj(subject)로 잘못 태깅하는 경우 예외처리
+# object complement가 있는데, 앞쪽 목적어를 nsubj(subject)로 잘못 태깅하는 경우 예외처리
 def repair_object_from_complement(parsed):
     for item in parsed:
         if item.get("role") in ["noun object complement", "adjective object complement"]:
             complement_children = item.get("children", [])
             
-            # ✅ 동사 기준 가장 가까운 compound 중 object 후보 필터링
+            # ✅ 동사 기준 가장 가까운 compound 하나만 object로 지정
             compound_candidates = [
                 t for t in parsed 
-                if (
-                    t["idx"] in complement_children and
-                    t.get("dep") == "compound" and
-                    t.get("pos") == "NOUN" and
-                    t.get("head_idx") == item["idx"]
-                )
+                if t["idx"] in complement_children and t.get("dep") == "compound"
             ]
             
             if compound_candidates:
@@ -321,11 +222,11 @@ def repair_object_from_complement(parsed):
                 compound_candidates.sort(key=lambda x: x["idx"])
                 compound_candidates[0]["role"] = "object"
 
-            # 보완: 종종 주어를 object로 잘못 넣기도 함 (이건 그대로 유지)
+            # nsubj는 그대로 유지
             for t in parsed:
                 if t.get("dep") == "nsubj" and t.get("idx") in complement_children:
                     t["role"] = "object"
-
+                    
     return parsed
 
 
@@ -341,52 +242,24 @@ def guess_combine(token, all_tokens):
             if t.get("head_idx") == idx:
                 r = t.get("role")
                 if r in [
-                    "object",
-                    "indirect object",
-                    "noun subject complement",
-                    "adjective subject complement",
-                    "noun object complement",
-                    "adjective object complement"  # 🔧 보어도 연결되게!
+                    "object", 
+                    "indirect object", 
+                    "noun subject complement", 
+                    "adjective subject complement"
                 ]:
                     combine.append({"text": t["text"], "role": r})
-                    # ✅ 보완: indirect object가 자식 갖고 있으면 그 중 direct object도 연결
-                    if r == "indirect object":
-                        children = [c for c in all_tokens if c.get("head_idx") == t["idx"]]
-                        for c in children:
-                            if c.get("role") in ["direct object", "object"]:
-                                combine.append({"text": c["text"], "role": c["role"]})
 
     # ✅ Indirect object → direct object (SVOO 구조)
     if role == "indirect object":
         for t in all_tokens:
-            if (
-                t.get("role") in ["direct object", "object"] and
-                t.get("head_idx") == token.get("head_idx")
-            ):
+            if t.get("head_idx") == idx and t.get("role") == "object":
                 combine.append({"text": t["text"], "role": "direct object"})
 
     # ✅ Object → object complement (SVOC 구조)
     if role == "object":
         for t in all_tokens:
-            t_role = t.get("role") or ""
-            if "object complement" in t_role:
-
-                # 🔹 기본 연결 조건: 보어가 object 자식이거나 반대
-                if (
-                    t.get("head_idx") == idx or
-                    idx == t.get("head_idx")
-                ):
-                    combine.append({"text": t["text"], "role": t["role"]})
-                    continue
-
-                # 🔹 추가 연결 조건: 보어가 object보다 뒤에 있고, head는 동일한 동사
-                if (
-                    t["idx"] > idx and
-                    t.get("dep") in {"advcl", "oprd", "xcomp", "ccomp"} and
-                    t.get("pos") == "ADJ" and
-                    t.get("head_idx") == token.get("head_idx")
-                ):
-                    combine.append({"text": t["text"], "role": t["role"]})
+            if t.get("head_idx") == idx and "object complement" in (t.get("role") or ""):
+                combine.append({"text": t["text"], "role": t["role"]})
 
     # ✅ Preposition → prepositional object
     if role == "preposition":
@@ -395,7 +268,6 @@ def guess_combine(token, all_tokens):
                 combine.append({"text": t["text"], "role": "prepositional object"})
 
     return combine if combine else None
-
 
 
 def assign_level_triggers(parsed):
@@ -410,9 +282,6 @@ def assign_level_triggers(parsed):
 
     for token in parsed:
         if token["dep"] not in trigger_deps:
-            continue
-
-        if not is_valid_clause_trigger(token):
             continue
 
         dep = token["dep"]
@@ -452,9 +321,6 @@ def assign_level_ranges(parsed):
         dep = token.get("dep")
         if dep not in clause_deps:
             continue
-        
-        if not is_valid_clause_trigger(token):
-            continue
 
         token_idx = token["idx"]
         clause_tokens = [token]  # 시작은 자기 자신 포함
@@ -488,35 +354,6 @@ def assign_level_ranges(parsed):
             t["level"] = 0
 
     return parsed
-
-# 목적보어를 계층 유발 요소로 태깅해 level이 발생하는 것에 대한 예외처리 함수임
-def is_valid_clause_trigger(token: dict) -> bool:
-    """
-    절(clause) 트리거로 사용할 수 있는 토큰인지 판별합니다.
-
-    예외 조건:
-    - dep가 clause용 dep (ccomp, xcomp, advcl 등)가 아님
-    - 보어 역할인 경우 (object complement 등)
-    향후 조건이 더 생기면 여기에 추가합니다.
-    """
-    dep = token.get("dep")
-    role = token.get("role")
-    pos = token.get("pos") 
-
-    clause_deps = ["ccomp", "xcomp", "advcl", "acl", "relcl"]
-
-    if dep not in clause_deps:
-        return False
-
-    if role in ["adjective object complement", "noun object complement"]:
-        return False
-
-    # ✅ 예외: ADJ인데 dep=advcl 인 경우는 절 아님
-    if dep == "advcl" and pos == "ADJ":
-        return False
-    
-    # 향후 더 예외조건이 생기면 여기에 추가
-    return True
 
 def repair_level_within_prepositional_phrases(parsed):
     """
@@ -705,25 +542,6 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     # 규칙 기반 파싱
     parsed = rule_based_parse(tokens)
 
-    # ✅ 보어 형용사 보정: ADJ인데 object로 된 경우
-    parsed = assign_adj_object_complement_when_compound_object(parsed)
-
-    # ✅ 보어 기준으로 object를 복원 (compound인 경우 등)
-    parsed = repair_object_from_complement(parsed)
-
-    # ✅ NEW: advcl+ADJ 보어 보정
-    parsed = assign_adj_complement_for_advcl_adjective(parsed)
-
-    # SVOO 관련 보정(indirect object role만 있는 경우)
-    parsed = recover_direct_object_from_indirect(parsed)
-
-
-    # ✅ 요기! 모든 보정 끝난 후에 combine 추론
-    for t in parsed:
-        combine = guess_combine(t, parsed)
-        if combine:
-            t["combine"] = combine
-
     # 조건: 규칙 기반 실패하거나, 강제로 GPT 사용 요청
     if not parsed or force_gpt:
         prompt = gpt_parsing_withprompt(tokens)  # 아래 2단계에서 만들 예정
@@ -819,31 +637,6 @@ def apply_symbols(parsed):
             if 0 <= idx < len(line) and line[idx] == " " and symbol:
                 line[idx] = symbol
 
-    # ⬇️ 여기서 combine 연결선을 _ 로 그려줌!
-    for item in parsed:
-        combine = item.get("combine")
-        level = item.get("level")
-        idx1 = item.get("idx")
-
-        if not combine or level is None:
-            continue
-
-        for comb in combine:
-            idx2 = next((t["idx"] for t in parsed if t["text"] == comb["text"]), None)
-            if idx2 is None:
-                continue
-
-            # 같은 레벨 줄에 밑줄 채우기
-            lvl = int(level)  # level이 float이면 int로 변환
-
-            line = symbols_by_level.setdefault(lvl, [" " for _ in range(line_length)])
-            start = min(idx1, idx2)
-            end = max(idx1, idx2)
-
-            for i in range(start + 1, end):
-                if line[i] == " ":
-                    line[i] = "_"
-
 
 # ◎ memory["symbols"] 내용을 출력하기 위해 만든 함수
 def symbols_to_diagram(sentence: str):
@@ -914,11 +707,6 @@ def t(sentence: str):
     for idx, symbol in memory.get("verb_attribute", {}).get("symbol_map", {}).items():
         print(f"  idx({idx}) → {symbol}")
 
-    print("\n🔎 Combine Check:")
-    for tok in parsed:
-        if tok.get("combine"):
-            print(f"  • {tok['text']} → {tok['combine']}")
-
     # ✅ morph 상세 출력
     print("\n📊 Full Token Info with Annotations:")
     doc = nlp(sentence)
@@ -950,18 +738,8 @@ def t(sentence: str):
     print(symbols_to_diagram(sentence))
 
 
-# 묶음 테스트 함수
-def t1(sentence: str):
-    # ✅ 메모리 먼저 초기화 (문장 길이 기반 설정 포함)
-    init_memorys(sentence)
 
-    # ✅ spaCy 파싱 + 역할 분석
-    parsed = spacy_parsing_backgpt(sentence)
-    memory["parsed"] = parsed
-    # ✅ 도식화 및 출력
-    apply_symbols(parsed)
-    print("🛠 Diagram:")
-    print(symbols_to_diagram(sentence))
+# 초간단 임시 테스트1 함수
 
 
 
@@ -969,7 +747,7 @@ def t1(sentence: str):
 __all__ = [
     "rule_based_parse",
     "guess_role",
-    "assign_noun_complement_for_SVOC_noun_only",
+    "assign_svoc_complement_as_name",
     "repair_object_from_complement",
     "guess_combine",
     "assign_level_triggers",
