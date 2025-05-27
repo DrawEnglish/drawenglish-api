@@ -600,7 +600,7 @@ def apply_modal_bridge_symbols_all_levels(parsed, sentence):
 
         if has_subject_between:
             if line[modal_idx] == " ":
-                line[modal_idx] = "∩"
+                line[modal_idx] = "n"
         else:
             if line[modal_idx] == " ":
                 line[modal_idx] = "."
