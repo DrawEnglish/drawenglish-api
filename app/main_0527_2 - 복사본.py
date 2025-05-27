@@ -344,10 +344,7 @@ def guess_combine(token, all_tokens):
     # ✅ Verb → object / complement (SVO, SVC)
     if role == "verb":
         for t in all_tokens:
-            if (
-                t.get("head_idx") == idx
-                and t["idx"] > idx  # 🔧 오른쪽 방향 연결만 허용
-            ):
+            if t.get("head_idx") == idx:
                 r = t.get("role")
                 if r in [
                     "object",
@@ -357,37 +354,35 @@ def guess_combine(token, all_tokens):
                     "noun object complement",
                     "adjective object complement"  # 🔧 보어도 연결되게!
                 ]:
-                    combine.append({"text": t["text"], "role": r, "idx": t["idx"]})
+                    combine.append({"text": t["text"], "role": r})
                     # ✅ 보완: indirect object가 자식 갖고 있으면 그 중 direct object도 연결
                     if r == "indirect object":
                         children = [c for c in all_tokens if c.get("head_idx") == t["idx"]]
                         for c in children:
-                            if (
-                                c.get("role") in ["direct object", "object"]
-                                and c["idx"] > t["idx"]  # 🔧 핵심 추가
-                            ):
-                                combine.append({"text": c["text"], "role": c["role"], "idx": c["idx"]})
+                            if c.get("role") in ["direct object", "object"]:
+                                combine.append({"text": c["text"], "role": c["role"]})
 
     # ✅ Indirect object → direct object (SVOO 구조)
     if role == "indirect object":
         for t in all_tokens:
             if (
-                t.get("role") in ["direct object"] and
+                t.get("role") in ["direct object", "object"] and
                 t.get("head_idx") == token.get("head_idx")
-                and t["idx"] > token["idx"]  # 🔧 오른쪽 방향만 연결
             ):
-                combine.append({"text": t["text"], "role": "direct object", "idx": t["idx"]})
+                combine.append({"text": t["text"], "role": "direct object"})
 
     # ✅ Object → object complement (SVOC 구조)
     if role == "object":
         for t in all_tokens:
             t_role = t.get("role") or ""
             if "object complement" in t_role:
+
+                # 🔹 기본 연결 조건: 보어가 object 자식이거나 반대
                 if (
                     t.get("head_idx") == idx or
                     idx == t.get("head_idx")
                 ):
-                    combine.append({"text": t["text"], "role": t["role"], "idx": t["idx"]})
+                    combine.append({"text": t["text"], "role": t["role"]})
                     continue
 
                 # 🔹 추가 연결 조건: 보어가 object보다 뒤에 있고, head는 동일한 동사
@@ -397,13 +392,13 @@ def guess_combine(token, all_tokens):
                     t.get("pos") == "ADJ" and
                     t.get("head_idx") == token.get("head_idx")
                 ):
-                    combine.append({"text": t["text"], "role": t["role"], "idx": t["idx"]})
+                    combine.append({"text": t["text"], "role": t["role"]})
 
     # ✅ Preposition → prepositional object
     if role == "preposition":
         for t in all_tokens:
             if t.get("head_idx") == idx and t.get("role") == "prepositional object":
-                combine.append({"text": t["text"], "role": "prepositional object", "idx": t["idx"]})
+                combine.append({"text": t["text"], "role": "prepositional object"})
 
     return combine if combine else None
 
@@ -844,7 +839,7 @@ def apply_symbols(parsed):
             continue
 
         for comb in combine:
-            idx2 = comb.get("idx")  # ✅ text 비교 대신 idx 직접 사용
+            idx2 = next((t["idx"] for t in parsed if t["text"] == comb["text"]), None)
             if idx2 is None:
                 continue
 
@@ -858,52 +853,6 @@ def apply_symbols(parsed):
             for i in range(start + 1, end):
                 if line[i] == " ":
                     line[i] = "_"
-
-# 동일레벨, 같은 절에 동사가 여러개 병렬 나열된 경우 동사덩어리 처음 요소와 끝요소를 .(점)으로 채워줌
-def draw_dot_bridge_across_verb_group(parsed):
-    line_length = memory["sentence_length"]
-    symbols_by_level = memory["symbols_by_level"]
-    visited = set()
-
-    for token in parsed:
-        # ✅ role 없이도 동사면 점선 연결 대상!
-        if token.get("pos") not in {"AUX", "VERB"}:
-            continue
-
-        dep = token.get("dep")
-        if dep not in {"ROOT", "conj", "xcomp", "ccomp"}:
-            continue
-
-        level = token.get("level")
-        if level is None:
-            continue
-
-        idx1 = token["idx"]
-        idx2 = None
-
-        for t in parsed:
-            if (
-                t["idx"] > idx1 and
-                t.get("level") == level and
-                t.get("pos") in {"VERB", "AUX"} and
-                t.get("dep") in {"ROOT", "conj", "xcomp", "ccomp"}
-            ):
-                has_subject_between = any(
-                    s.get("role") == "subject" and
-                    s.get("level") == level and
-                    idx1 < s["idx"] < t["idx"]
-                    for s in parsed
-                )
-                if has_subject_between:
-                    break
-                idx2 = t["idx"]
-
-        if idx2 and (idx1, idx2) not in visited:
-            visited.add((idx1, idx2))
-            line = symbols_by_level.setdefault(level, [" " for _ in range(line_length)])
-            for i in range(idx1 + 1, idx2):
-                if line[i] == " ":
-                    line[i] = "."
 
 
 # ◎ memory["symbols"] 내용을 출력하기 위해 만든 함수
@@ -935,8 +884,6 @@ def symbols_to_diagram(sentence: str):
 
     for level in sorted(memory["symbols_by_level"]):
         output_lines.append(''.join(memory["symbols_by_level"][level]))
-
-    draw_dot_bridge_across_verb_group(parsed)
 
     return '\n'.join(output_lines)
 
@@ -1009,7 +956,6 @@ def t(sentence: str):
 
     # ✅ 도식화 및 출력
     apply_symbols(parsed)
-    draw_dot_bridge_across_verb_group(parsed)
     print("🛠 Diagram:")
     print(symbols_to_diagram(sentence))
 
@@ -1024,7 +970,6 @@ def t1(sentence: str):
     memory["parsed"] = parsed
     # ✅ 도식화 및 출력
     apply_symbols(parsed)
-    draw_dot_bridge_across_verb_group(parsed)
     print("🛠 Diagram:")
     print(symbols_to_diagram(sentence))
 
@@ -1057,7 +1002,6 @@ async def analyze(request: AnalyzeRequest):            # sentence를 받아 다�
     parsed = spacy_parsing_backgpt(request.sentence)               # GPT의 파싱결과를 parsed에 저장
     memory["parsed"] = parsed
     apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
-    draw_dot_bridge_across_verb_group(parsed)
     return {"sentence": request.sentence,
             "diagramming": symbols_to_diagram(request.sentence),
             "verb_attribute": memory.get("verb_attribute", {})
