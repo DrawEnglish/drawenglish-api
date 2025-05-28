@@ -533,40 +533,50 @@ def is_valid_clause_trigger(token: dict) -> bool:
 
 def repair_level_within_prepositional_phrases(parsed):
     """
-    전치사(prep 또는 agent)의 목적어(pobj) 레벨이 다를 경우
-    전치사의 level 기준으로 범위 내 토큰들을 보정.
+    prep의 목적어 pobj를 찾을 때:
+    - dep == 'pobj'
+    - head_idx == prep.idx
+    - prep의 실제 children에 포함
+    
+    세 가지 모두 만족해야 함.
+    
+    level이 다르면 prep 기준으로 보정.
     """
 
     for prep in parsed:
-        if prep.get("dep") not in {"prep", "agent"}:
+        if prep.get("dep") != "prep":
             continue
 
         prep_level = prep.get("level")
         if prep_level is None:
             continue
 
-        prep_idx = prep["idx"]
+        # ✅ prep의 children 목록 확보
+        children = [t for t in parsed if t.get("head_idx") == prep["idx"]]
+        child_ids = {t["idx"] for t in children}
 
-        # ✅ 모든 토큰 중에서 pobj 후보 찾기 (children 조건 제외)
+        # ✅ 모든 토큰 중에서 pobj 후보 찾기 (이중 조건 적용)
         pobj_candidates = [
             t for t in parsed
-            if t.get("dep") == "pobj" and t.get("head_idx") == prep_idx
+            if t.get("dep") == "pobj"
+            and t.get("head_idx") == prep["idx"]
+            and t["idx"] in child_ids
         ]
 
         for pobj in pobj_candidates:
             pobj_level = pobj.get("level")
 
+            # level이 같으면 보정 필요 없음
             if pobj_level == prep_level:
-                continue  # 이미 동일하면 건너뜀
+                continue
 
-            # ✅ prep ~ pobj 사이 범위를 찾아 level 보정
-            start = min(prep_idx, pobj["idx"])
-            end = max(prep_idx, pobj["idx"])
+            # ✅ prep ~ pobj 범위 추출
+            start = min(prep["idx"], pobj["idx"])
+            end = max(prep["idx"], pobj["idx"])
 
             for t in parsed:
                 if start <= t["idx"] <= end:
                     t["level"] = prep_level
-                    t["level_corrected_from_prep"] = True  # 디버깅용 표시
 
     return parsed
 
