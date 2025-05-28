@@ -134,13 +134,15 @@ def guess_role(t, all_tokens=None):  # all_tokens 추가 필요
                     return "direct object"
         return "object"
 
-    # ✅ Preposition
-    if dep == "prep":
+    # ✅ Preposition (agent 포함)
+    if dep in ["prep", "agent"]:
         return "preposition"
-    
-    # ✅ Prepositional Object
+
+    # ✅ Prepositional Object (by ~pobj 구조 커버)
     if dep == "pobj":
-        return "prepositional object"
+        head_token = next((t for t in all_tokens if t["idx"] == head_idx), None)
+        if head_token and head_token.get("role") == "preposition":
+            return "prepositional object"
 
     # ✅ Conjunction or Clause Marker (접속사)
     if dep in ["cc", "mark"]:
@@ -639,100 +641,122 @@ def clean_empty_symbol_lines():
         del memory["symbols_by_level"][level]
 
 
-def set_verb_attribute(parsed):
+def set_verb_attributes(parsed):
     """
-    parsed 데이터를 기반으로 시제, 상, 태 정보를 추출해서 memory["verb_attribute"]에 저장.
-    동사덩어리의 각 구성요소에 대해 적절한 기호를 배치.
+    주절/종속절 구분 및 등위접속사 등장 기준으로 동사 덩어리(verb chain)별
+    시제/상/태 분석 및 도식 기호 생성.
+    결과는 memory["verb_attribute"]에 symbol_map으로 병합 저장됨.
     """
+
+    memory["verb_attribute_by_chain"] = []
     memory["verb_attribute"] = {}
+    sentence_len = memory["sentence_length"]
 
-    # 동사 및 조동사 추출
-    verb_chain = [t for t in parsed if t["pos"] in {"AUX", "VERB"}]
-    if not verb_chain:
-        return
+    chains = []
+    current_chain = []
+    last_level = None
 
-    first = verb_chain[0]
-    last = verb_chain[-1]
-    chain_len = len(verb_chain)
+    for token in parsed:
+        level = token.get("level", 0)
 
-    # 메모리 공간 확보 (문장 길이만큼)
-    symbol_map = {}
-    aspect = []
-    voice = None
+        # 등위절 분기 조건: (1) 새 주어, (2) 등위접속사(cc)
+        if (
+            token.get("role") == "subject" or
+            (token.get("dep") == "cc" and token.get("pos") == "CCONJ")
+        ):
+            if current_chain:
+                chains.append(current_chain)
+                current_chain = []
+            last_level = level
 
-    # 시제 추출 (현재|과거)
-    morph = first.get("morph", {})
-    raw_tense = morph.get("Tense")
-    if isinstance(raw_tense, str):
-        tense = raw_tense.lower()
-    elif isinstance(raw_tense, list) and raw_tense:
-        tense = raw_tense[0].lower()
-    else:
-        tense = "pres"
-    symbol_map[first["idx"]] = "|" if tense == "pres" else ">"
+        # 종속절 level 변화 시에도 분리
+        if last_level is not None and level != last_level:
+            if current_chain:
+                chains.append(current_chain)
+                current_chain = []
+            last_level = level
 
-    # 본동사가 혼자 있는 경우
-    if chain_len == 1:
-        memory["verb_attribute"] = {
+        # 동사/조동사만 chain에 포함
+        if token["pos"] in {"AUX", "VERB"}:
+            current_chain.append(token)
+
+    if current_chain:
+        chains.append(current_chain)
+
+    all_symbol_maps = {}
+
+    # 각 verb chain에 대해 분석
+    for chain in chains:
+        if not chain:
+            continue
+
+        first = chain[0]
+        last = chain[-1]
+        morph = first.get("morph", {})
+
+        # 시제 추출
+        raw_tense = morph.get("Tense")
+        if isinstance(raw_tense, str):
+            tense = raw_tense.lower()
+        elif isinstance(raw_tense, list) and raw_tense:
+            tense = raw_tense[0].lower()
+        else:
+            tense = "pres"
+
+        symbol_map = {}
+        aspect = []
+        voice = None
+        symbol_map[first["idx"]] = "|" if tense == "pres" else ">"
+
+        # 중간 조동사 분석
+        for t in chain[1:-1]:
+            if t["lemma"] == "have" or t["text"].lower() == "been":
+                symbol_map[t["idx"]] = "P"
+                if "perfect" not in aspect:
+                    aspect.append("perfect")
+            elif t["lemma"] == "be" and t.get("tag") == "VBG":
+                symbol_map[t["idx"]] = "i"
+                if "progressive" not in aspect:
+                    aspect.append("progressive")
+            elif t["text"].lower() == "being":
+                symbol_map[t["idx"]] = "i"
+                if "progressive" not in aspect:
+                    aspect.append("progressive")
+
+        # 마지막 본동사 기준 수동/진행 판단
+        if last.get("tag") == "VBN":
+            prev_texts = [t["text"].lower() for t in chain[:-1]]
+            second_last = chain[-2] if len(chain) >= 2 else None
+            if "being" in prev_texts or (second_last and second_last["lemma"] == "be"):
+                symbol_map[last["idx"]] = "^"
+                voice = "passive"
+            elif last["lemma"] == "be":
+                symbol_map[last["idx"]] = "^"
+                voice = "passive"
+            elif "have" in [t["lemma"] for t in chain]:
+                symbol_map[last["idx"]] = "P"
+                if "perfect" not in aspect:
+                    aspect.append("perfect")
+        elif last.get("tag") == "VBG" and "be" in [t["lemma"] for t in chain]:
+            symbol_map[last["idx"]] = "i"
+            if "progressive" not in aspect:
+                aspect.append("progressive")
+
+        memory["verb_attribute_by_chain"].append({
             "tense": tense,
             "aspect": aspect,
             "voice": voice,
             "main_verb": last["text"],
-            "verb_chain": [t["text"] for t in verb_chain],
-            "tense_position": first["idx"],
+            "verb_chain": [t["text"] for t in chain],
             "symbol_map": symbol_map
-        }
-        return
+        })
 
-    # 중간 요소에서 완료(P), 진행(i) 탐지
-    for t in verb_chain[1:-1]:
-        if t["lemma"] == "have" or t["text"].lower() == "been":
-            symbol_map[t["idx"]] = "P"
-            if "perfect" not in aspect:
-                aspect.append("perfect")
-        elif t["lemma"] == "be" and t.get("tag") == "VBG":
-            symbol_map[t["idx"]] = "i"
-            if "progressive" not in aspect:
-                aspect.append("progressive")
-        elif t["text"].lower() == "being":
-            symbol_map[t["idx"]] = "i"
-            if "progressive" not in aspect:
-                aspect.append("progressive")
+        # symbol_map 병합
+        all_symbol_maps.update(symbol_map)
 
-    # 마지막 본동사에서 처리
-    if last.get("tag") == "VBN":
-        prev_texts = [t["text"].lower() for t in verb_chain[:-1]]
-        second_last = verb_chain[-2] if chain_len >= 2 else None
-        if "being" in prev_texts:
-            symbol_map[last["idx"]] = "^"
-            voice = "passive"
-        elif any(symbol == "P" for idx, symbol in symbol_map.items() if idx != last["idx"]):
-            symbol_map[last["idx"]] = "^"
-            voice = "passive"
-        elif second_last and second_last["lemma"] == "be":
-            symbol_map[last["idx"]] = "^"
-            voice = "passive"
-        elif last["lemma"] == "be":
-            symbol_map[last["idx"]] = "^"
-            voice = "passive"
-        elif "have" in [t["lemma"] for t in verb_chain]:
-            symbol_map[last["idx"]] = "P"
-            if "perfect" not in aspect:
-                aspect.append("perfect")
-    elif last.get("tag") == "VBG" and "be" in [t["lemma"] for t in verb_chain]:
-        symbol_map[last["idx"]] = "i"
-        if "progressive" not in aspect:
-            aspect.append("progressive")
-
-    # 결과 저장
+    # 최종 구조에 기존과 동일하게 저장 (호환)
     memory["verb_attribute"] = {
-        "tense": tense,
-        "aspect": aspect,
-        "voice": voice,
-        "main_verb": last["text"],
-        "verb_chain": [t["text"] for t in verb_chain],
-        "tense_position": first["idx"],
-        "symbol_map": symbol_map
+        "symbol_map": all_symbol_maps
     }
 
 # ◎ GPT 프롬프트 처리 함수
@@ -812,7 +836,7 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     # ✅ 📍 level 보정: prep-pobj 레벨 통일
     parsed = repair_level_within_prepositional_phrases(parsed)
 
-    set_verb_attribute(parsed)
+    set_verb_attributes(parsed)
 
     return parsed
 
