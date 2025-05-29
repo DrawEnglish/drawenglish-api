@@ -846,7 +846,63 @@ def set_modal_attributes(parsed):
                 if symbol_map.get(idx):
                     symbol_map[idx] = " "  # 빈칸으로 제거
 
+
     # 업데이트
+    memory["verb_attribute"]["symbol_map"] = symbol_map
+
+
+def clean_modal_subject_havebe_tense(parsed):
+    """
+    modal 조동사 뒤에 주어가 오고 그 다음 have/be가 오는 구조에서,
+    have/be가 문법적 연결일 뿐 의미 없는 경우이므로 도식 기호 제거 (빈칸으로).
+    - modal → subject → have/be
+    - modal → not/n't → subject → have/be
+    """
+    if "symbol_map" not in memory.get("verb_attribute", {}):
+        return
+
+    symbol_map = memory["verb_attribute"]["symbol_map"]
+    modal_set = modalVerbs_present | modalVerbs_past
+    negation_words = {"not", "n't"}
+
+    for i in range(len(parsed) - 2):
+        modal = parsed[i]
+
+        # modal + subject + have/be (3단 구조)
+        subj = parsed[i + 1]
+        aux = parsed[i + 2]
+
+        if (
+            modal.get("pos") == "AUX" and
+            modal.get("lemma") in modal_set and
+            subj.get("dep") in ("nsubj", "nsubjpass") and
+            aux.get("pos") == "AUX" and
+            aux.get("lemma") in {"have", "be"}
+        ):
+            idx = aux["idx"]
+            if symbol_map.get(idx):
+                symbol_map[idx] = " "
+
+    for i in range(len(parsed) - 3):
+        modal = parsed[i]
+        maybe_not = parsed[i + 1]
+        subj = parsed[i + 2]
+        aux = parsed[i + 3]
+
+        # modal + not/n't + subject + have/be (4단 구조)
+        if (
+            modal.get("pos") == "AUX" and
+            modal.get("lemma") in modal_set and
+            maybe_not.get("text").lower() in negation_words and
+            subj.get("dep") in ("nsubj", "nsubjpass") and
+            aux.get("pos") == "AUX" and
+            aux.get("lemma") in {"have", "be"}
+        ):
+            idx = aux["idx"]
+            if symbol_map.get(idx):
+                symbol_map[idx] = " "
+
+    # 최종 반영
     memory["verb_attribute"]["symbol_map"] = symbol_map
 
 
@@ -929,6 +985,7 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
 
     set_verb_attributes(parsed)
     set_modal_attributes(parsed)
+    clean_modal_subject_havebe_tense(parsed)
 
     return parsed
 
