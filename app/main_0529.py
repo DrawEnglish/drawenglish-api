@@ -62,11 +62,6 @@ noObjectVerbs = {
     "die", "arrive", "exist", "go", "come", "vanish", "fall", "sleep", "occur"
 }
 
-modalVerbs_present = {"will", "shall", "can", "may", "must"}
-modalVerbs_past = {"would", "should", "could", "might"}
-modalVerbs_all = modalVerbs_present | modalVerbs_past
-
-
 # spaCy가 전치사로 오인 태깅하는 특수 단어들
 blacklist_preposition_words = {"due", "according"}
 
@@ -454,7 +449,7 @@ def guess_combine(token, all_tokens):
             # ✅ 이 token이 그 "to"일 경우만 연결
             if to_token and to_token["idx"] == idx:
                 combine.append({"text": t["text"], "role": t["role"], "idx": t["idx"]})
-
+                
     # ✅ combine 있을 경우만 반환
     return combine if combine else None
 
@@ -798,58 +793,6 @@ def set_verb_attributes(parsed):
         "symbol_map": all_symbol_maps
     }
 
-def set_modal_attributes(parsed):
-    """
-    modal 조동사의 시제 및 가정법 여부를 분석하여
-    memory["verb_attribute"]["symbol_map"]에 추가 기호 삽입.
-    - 현재시제: |
-    - 과거시제: >
-    - 가정법:  》 (추론 기준에 따라)
-    """
-    if "verb_attribute" not in memory:
-        memory["verb_attribute"] = {}
-
-    symbol_map = memory["verb_attribute"].get("symbol_map", {})
-
-    for token in parsed:
-        if token.get("pos") != "AUX":
-            continue
-        lemma = token.get("lemma", "").lower()
-
-        # 현재시제 modal
-        if lemma in modalVerbs_present:
-            symbol_map[token["idx"]] = "|"
-
-        # 과거시제 modal
-        elif lemma in modalVerbs_past:
-            symbol_map[token["idx"]] = ">"
-
-            # ✅ 가정법 여부 판별
-            is_hypothetical = any(
-                t.get("text").lower() in {"if", "unless", "suppose"} and t.get("dep") in {"mark", "cc"}
-                for t in parsed
-            )
-            if is_hypothetical:
-                symbol_map[token["idx"]] = "》"  # 과거형 가정법으로 덮어쓰기
-
-    # ✅ 보정: modal 뒤 'have' 완료값 제거
-    if "symbol_map" in memory.get("verb_attribute", {}):
-        symbol_map = memory["verb_attribute"]["symbol_map"]
-
-        for token in parsed:
-            if (
-                token.get("text", "").lower() == "have" and
-                token.get("pos") == "AUX" and
-                token.get("morph", {}).get("VerbForm") == "Inf"
-            ):
-                idx = token["idx"]
-                if symbol_map.get(idx):
-                    symbol_map[idx] = " "  # 빈칸으로 제거
-
-    # 업데이트
-    memory["verb_attribute"]["symbol_map"] = symbol_map
-
-
 # ◎ GPT 프롬프트 처리 함수
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     doc = nlp(sentence)
@@ -928,7 +871,6 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     parsed = repair_level_within_prepositional_phrases(parsed)
 
     set_verb_attributes(parsed)
-    set_modal_attributes(parsed)
 
     return parsed
 
