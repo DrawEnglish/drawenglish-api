@@ -1,5 +1,6 @@
 import os, json, re
 import spacy
+import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse  # render에 10분 단위 Ping 보내기를 위해 추가
 from pydantic import BaseModel
