@@ -1,0 +1,119 @@
+일단 set_verb_attributes 함수에서
+본동사단독 또는 조동사(modal이 포함될 수 있음)들+본동사 덩어리를 
+레벨별, 나중에 나오는 등위절, 종속접속사, 각종 동사구에서의 동사덩어리를 뽑아내는 데에는 문제없지?
+
+
+P1. 동사덩어리 첫단어가 modal 조동사인지 판별
+
+첫번째 토큰 단어가 POS(aux) and DEP(aux) and TAG(MD)이면 modal확정
+modalVerbs_present = {"will", "shall", "can", "may", "must"}
+modalVerbs_past = {"would", "should", "could", "might"}
+위 전역변수 선언에 따라
+modalVerbs_present는 현재시제 |, modalVerbs_past는 과거시제 > 저장
+
+함수 이름은 set_verbchunk_attributes로 하자
+
+현재 토큰이 modal이 아니면 그대로 다음 조건문 실행으로 감.
+
+
+P2. 현재 토큰이 조동사인 경우 처리 
+
+현재 토큰이 DEP(root) 이면 토큰값 그대로 가지고 P3.으로 빠져나감
+
+현재 토큰이 POS(aux) and DEP(aux or auxpass)이면 조동사 확정
+
+현재 토큰이 Morph VerbForm(fin)이면,
+TAG(VBP or VBZ) or Morph Tense(pres) 이면 현재시제 | 저장
+TAG(VBD) or Morph Tense(past) 이면 과거시제 > 저장
+
+현재 토큰이 단어자체(lemma말고)가 'been'이고, TAG(VBN)이면 완료 P저장
+
+현재 토큰이 단어자체(lemma말고)가 'being'이고, TAG(VBG)이면 진행 i저장
+
+현재 토큰이 TAG(VB) and Morph VerbForm(Inf) 이면
+아무것도 저장하지 않고(원형 VB이므로 표식 대상 아님) 다음 토큰(+1)으로 넘어감
+
+다음 토큰이 또 POS(aux) and DEP(aux or auxpass)이면 조동사 확정하고 P2. 반복
+※ 이건 그냥 참고 : 현시점에서는 조동사가 modal 또는 DEP(VB)일 수가 없음
+
+
+P3. P2.에서 현재 토큰이 DEP(root)인채로 넘어옴
+
+현재 토큰이 DEP(root or advcl or xcomp)이면,
+
+현재 토큰이 Morph VerbForm(fin)이면,
+TAG(VBP or VBZ) or Morph Tense(pres) 이면 현재시제 | 저장
+TAG(VBD) or Morph Tense(past) 이면 과거시제 > 저장
+
+현재 토큰이 TAG(VBN) and 앞쪽(왼쪽으로 찾아감)으로 처음 나오는 POS(aux) 단어가 DEP(aux)고
+그 단어의 lemma가 'have' 이면 완료 P저장
+현재 토큰이 TAG(VBN) and 앞쪽(왼쪽으로 찾아감)으로 처음 나오는 POS(aux) 단어가 DEP(auxpass)이고
+그 단어의 lemma가 'be'이면 수동 ^ 저장
+현재 토큰이 TAG(VBG)이면 진행 i저장
+
+현재 토큰이 TAG(VB) and Morph VerbForm(Inf) 이면
+아무것도 저장하지 않고(원형 VB이므로 표식 대상 아님) 
+동사덩어리 속성 표시 처리과정 끝냄.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+자 그래서 첫번째 핵심 로직 설계 들어간다.
+동사덩어리의 맨앞 요소가 modal인걸 확정하는 조건이 필요한데,
+내가 일일이 직접 해봤다.
+POS(aux), DEP(aux), TAG(MD) 이 조합은 여지없어
+그래서 이 조건으로 하면 되는데,
+나는 modal들에 현재 |, 과거 > 표시를 저장하고 싶어,
+근데 태깅값을 없단 말이지, 그래서 전역변수
+modalVerbs_all = modalVerbs_present | modalVerbs_past
+이걸 이용해 modalVerbs_present 이거면 | 저장,
+modalVerbs_past 이거면 > 저장할거야.
+딱 요부분까지 해당하는 소스 줘볼래?
+함수 이름은 set_verbchunk_attributes로 하자
+
+
+오케 좋아..
+만약에 첫요소가 modal이 아니라면 패싱되어 2번째 또는 또다른 첫번째 요소로 가겠지?
+이제 다음 요소에 modal이 나올일은 절대 없어. 맞지?
+▷▷ 
+modal이 아닌 일반 조동사가 첫요소로 올 수 있어
+그경우 조건은 POS(aux), DEP(aux 또는 auxpsss)
+
+
+
+
+대신 not, n't의 부정어가 나올 수 있는데, 
+이때는 DEP(neg), morph(ploarity:Neg)로 공통적으로 태깅되,
+이 조건을 이용할 수도 있고,
+그냥 형태 not, n't 또는 lemma not을 이용할 수도 있을 거야?
+어떤 조건으로 부정어 not, n't을 확정하면 좋을까?
+
+
+오케 좋아 부정어, 주어 따위는 조건 만들 필요도 없어,
+근데 조건은, 체크하고 continue하는 부분은 필요하니까.
+친구야 그럼 다음 요소가 aux 또는 verb가 아니면 continue 하면 되자나?
+
+
+자. 중요하다!!
+그다음 POS(verb) 또는 DEP(root)가 아닐 경우에는 본동사가 나오기 전에 조동사가 또 낀경우야,
+
+
+
+
+
+
+
+본동사 단독으로 쓰는 경우는 다음 요소가 
+POS(verb) 또는 DEP(root) 일때
+이때 morph verbform이 fin일 경우 시제를 저장해야하는데,
+이때 morph tense값이 pres이면 |, past이면 >를 저장해,

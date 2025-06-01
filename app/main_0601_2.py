@@ -92,13 +92,11 @@ def rule_based_parse(tokens):
     result = []
     for t in tokens:
         t["children"] = [c["idx"] for c in tokens if c["head_idx"] == t["idx"]]
-        t["role1"] = None
-        t["role2"] = None
 
         # role 추론
-        role1 = guess_role(t, tokens)
-        if role1:
-            t["role1"] = role1  # combine에서 쓰일 수 있음
+        role = guess_role(t, tokens)
+        if role:
+            t["role"] = role  # combine에서 쓰일 수 있음
 
     # 'name'과 같은 동사가 있는 SVOC구조에서 목적보어를 잘못 태깅하는 것 보정 함수
     result = tokens  # 기존 tokens을 수정하며 계속 사용
@@ -110,7 +108,7 @@ def rule_based_parse(tokens):
     return result
 
 
-# role 추론 함수
+# role 추론 함수수
 def guess_role(t, all_tokens=None):  # all_tokens 추가 필요
     dep = t.get("dep")
     pos = t["pos"]
@@ -126,7 +124,7 @@ def guess_role(t, all_tokens=None):  # all_tokens 추가 필요
 
     # ✅ 등위접속사 다음 병렬 동사 (conj)도 verb role 부여
     if pos == "VERB" and dep == "conj":
-        if any(t["idx"] == head_idx and t.get("role1") == "verb" for t in all_tokens):
+        if any(t["idx"] == head_idx and t.get("role") == "verb" for t in all_tokens):
             return "verb"
 
 
@@ -160,7 +158,7 @@ def guess_role(t, all_tokens=None):  # all_tokens 추가 필요
     if dep == "pobj":
         head_token = next((t for t in all_tokens if t["idx"] == head_idx), None)
         if head_token and (
-            head_token.get("role1") == "preposition"
+            head_token.get("role") == "preposition"
             or (
                 head_token["text"].lower() in blacklist_preposition_words and
                 (
@@ -214,7 +212,7 @@ def recover_direct_object_from_indirect(parsed):
     SVOO 문장에서 indirect object에 대해 appos 구조의 direct object를 복원
     """
     for token in parsed:
-        if token.get("role1") == "indirect object":
+        if token.get("role") == "indirect object":
             token_idx = token.get("idx")
 
             for child in parsed:
@@ -223,7 +221,7 @@ def recover_direct_object_from_indirect(parsed):
                     child.get("dep") == "appos" and
                     child.get("pos") in {"NOUN", "PROPN"}
                 ):
-                    child["role1"] = "direct object"
+                    child["role"] = "direct object"
                     break
 
     return parsed
@@ -260,7 +258,7 @@ def assign_noun_complement_for_SVOC_noun_only(parsed):
                     t.get("dep") in ["nsubj", "nmod", "attr", "appos", "npadvmod", "ccomp"] and
                     t.get("pos") in ["NOUN", "PROPN"]
                 ):
-                    t["role1"] = "noun object complement"
+                    t["role"] = "noun object complement"
                     applied = True
                     break
 
@@ -294,7 +292,7 @@ def assign_adj_object_complement_when_compound_object(parsed):
                     for c in children
                 )
                 if has_compound:
-                    t["role1"] = "adjective object complement"
+                    t["role"] = "adjective object complement"
 
     return parsed
 
@@ -315,7 +313,7 @@ def assign_adj_complement_for_advcl_adjective(parsed):
 
         # 1. object 있는지 먼저 확인
         obj = next(
-            (t for t in parsed if t.get("head_idx") == verb_idx and t.get("role1") in ["object", "direct object"]),
+            (t for t in parsed if t.get("head_idx") == verb_idx and t.get("role") in ["object", "direct object"]),
             None
         )
         if not obj:
@@ -331,14 +329,14 @@ def assign_adj_complement_for_advcl_adjective(parsed):
                 t.get("dep") == "advcl" and
                 t.get("pos") == "ADJ"
             ):
-                t["role1"] = "adjective object complement"
+                t["role"] = "adjective object complement"
     return parsed
 
 
 # 목적보어(object complement)가 있는데, 앞쪽 목적어를 nsubj(subject)로 잘못 태깅하는 경우 예외처리
 def repair_object_from_complement(parsed):
     for item in parsed:
-        if item.get("role1") in ["noun object complement", "adjective object complement"]:
+        if item.get("role") in ["noun object complement", "adjective object complement"]:
             complement_children = item.get("children", [])
             
             # ✅ 동사 기준 가장 가까운 compound 중 object 후보 필터링
@@ -355,30 +353,30 @@ def repair_object_from_complement(parsed):
             if compound_candidates:
                 # 🔹 가장 낮은 idx (동사에 가까운 단어) 선택
                 compound_candidates.sort(key=lambda x: x["idx"])
-                compound_candidates[0]["role1"] = "object"
+                compound_candidates[0]["role"] = "object"
 
             # 보완: 종종 주어를 object로 잘못 넣기도 함 (이건 그대로 유지)
             for t in parsed:
                 if t.get("dep") == "nsubj" and t.get("idx") in complement_children:
-                    t["role1"] = "object"
+                    t["role"] = "object"
 
     return parsed
 
 
 # combine 추론 함수
 def guess_combine(token, all_tokens):
-    role1 = token.get("role1")
+    role = token.get("role")
     idx = token.get("idx")
     combine = []
 
     # ✅ Verb → object / complement (SVO, SVC)
-    if role1 == "verb":
+    if role == "verb":
         for t in all_tokens:
             if (
                 t.get("head_idx") == idx
                 and t["idx"] > idx  # 🔧 오른쪽 방향 연결만 허용
             ):
-                r = t.get("role1")
+                r = t.get("role")
                 if r in [
                     "object",
                     "indirect object",
@@ -387,37 +385,37 @@ def guess_combine(token, all_tokens):
                     "noun object complement",
                     "adjective object complement"  # 🔧 보어도 연결되게!
                 ]:
-                    combine.append({"text": t["text"], "role1": r, "idx": t["idx"]})
+                    combine.append({"text": t["text"], "role": r, "idx": t["idx"]})
                     # ✅ 보완: indirect object가 자식 갖고 있으면 그 중 direct object도 연결
                     if r == "indirect object":
                         children = [c for c in all_tokens if c.get("head_idx") == t["idx"]]
                         for c in children:
                             if (
-                                c.get("role1") in ["direct object", "object"]
+                                c.get("role") in ["direct object", "object"]
                                 and c["idx"] > t["idx"]  # 🔧 핵심 추가
                             ):
-                                combine.append({"text": c["text"], "role1": c["role1"], "idx": c["idx"]})
+                                combine.append({"text": c["text"], "role": c["role"], "idx": c["idx"]})
 
     # ✅ Indirect object → direct object (SVOO 구조)
-    if role1 == "indirect object":
+    if role == "indirect object":
         for t in all_tokens:
             if (
-                t.get("role1") in ["direct object"] and
+                t.get("role") in ["direct object"] and
                 t.get("head_idx") == token.get("head_idx")
                 and t["idx"] > token["idx"]  # 🔧 오른쪽 방향만 연결
             ):
-                combine.append({"text": t["text"], "role1": "direct object", "idx": t["idx"]})
+                combine.append({"text": t["text"], "role": "direct object", "idx": t["idx"]})
 
     # ✅ Object → object complement (SVOC 구조)
-    if role1 == "object":
+    if role == "object":
         for t in all_tokens:
-            t_role = t.get("role1") or ""
+            t_role = t.get("role") or ""
             if "object complement" in t_role:
                 if (
                     t.get("head_idx") == idx or
                     idx == t.get("head_idx")
                 ):
-                    combine.append({"text": t["text"], "role1": t["role1"], "idx": t["idx"]})
+                    combine.append({"text": t["text"], "role": t["role"], "idx": t["idx"]})
                     continue
 
                 # 🔹 추가 연결 조건: 보어가 object보다 뒤에 있고, head는 동일한 동사
@@ -427,18 +425,18 @@ def guess_combine(token, all_tokens):
                     t.get("pos") == "ADJ" and
                     t.get("head_idx") == token.get("head_idx")
                 ):
-                    combine.append({"text": t["text"], "role1": t["role1"], "idx": t["idx"]})
+                    combine.append({"text": t["text"], "role": t["role"], "idx": t["idx"]})
 
     # ✅ Preposition → prepositional object
-    if role1 == "preposition":
+    if role == "preposition":
         for t in all_tokens:
-            if t.get("head_idx") == idx and t.get("role1") == "prepositional object":
-                combine.append({"text": t["text"], "role1": "prepositional object", "idx": t["idx"]})
+            if t.get("head_idx") == idx and t.get("role") == "prepositional object":
+                combine.append({"text": t["text"], "role": "prepositional object", "idx": t["idx"]})
 
         # 2️⃣ 예외 보정: head가 due/according인데, 이 token이 그 뒤의 "to"일 경우
     for t in all_tokens:
         if (
-            t.get("role1") == "prepositional object" and
+            t.get("role") == "prepositional object" and
             t.get("head_idx") in [
                 b["idx"] for b in all_tokens if b["text"].lower() in blacklist_preposition_words
             ]
@@ -458,7 +456,7 @@ def guess_combine(token, all_tokens):
 
             # ✅ 이 token이 그 "to"일 경우만 연결
             if to_token and to_token["idx"] == idx:
-                combine.append({"text": t["text"], "role1": t["role1"], "idx": t["idx"]})
+                combine.append({"text": t["text"], "role": t["role"], "idx": t["idx"]})
 
     # ✅ combine 있을 경우만 반환
     return combine if combine else None
@@ -564,13 +562,13 @@ def is_valid_clause_trigger(token: dict) -> bool:
     향후 조건이 더 생기면 여기에 추가합니다.
     """
     dep = token.get("dep")
-    role1 = token.get("role1")
+    role = token.get("role")
     pos = token.get("pos") 
 
     if dep not in level_trigger_deps:
         return False
 
-    if role1 in ["adjective object complement", "noun object complement"]:
+    if role in ["adjective object complement", "noun object complement"]:
         return False
 
     # ✅ 예외: ADJ인데 dep=advcl 인 경우는 절 아님
@@ -908,7 +906,7 @@ Token Info:
 {token_block}
 
 Return a JSON list with each token's role in the sentence.
-Each item must have: idx, text, role1, role2, and optionally combine/level.
+Each item must have: idx, text, role, and optionally combine/level.
 
 If unsure, return best-guess. Do not return explanations, just the JSON.
 """
@@ -929,7 +927,7 @@ def apply_symbols(parsed):
 
     for item in parsed:
         idx = item.get("idx", -1)
-        role1 = str(item.get("role1", "") or "").lower()
+        role = item.get("role", "").lower()
         level = item.get("level")
 
         if idx < 0 or level is None:
@@ -941,7 +939,7 @@ def apply_symbols(parsed):
             levels = [int(level), int(level) + 1]
 
         # 
-        symbol = role_to_symbol.get(role1)
+        symbol = role_to_symbol.get(role)
 
         for lvl in levels:
             line = symbols_by_level.setdefault(lvl, [" " for _ in range(line_length)])
@@ -991,7 +989,7 @@ def apply_aux_to_mverb_bridge_symbols_each_levels(parsed, sentence):
         # ✅ 조동사 이후에 나오는 첫 번째 본동사(verb role)
         verb_token = next(
             (t for t in parsed
-             if t.get("role1") == "verb"
+             if t.get("role") == "verb"
              and t.get("level") == level
              and t["idx"] > modal_idx),
             None
@@ -1004,7 +1002,7 @@ def apply_aux_to_mverb_bridge_symbols_each_levels(parsed, sentence):
 
         # ✅ 의문문 판단
         has_subject_between = any(
-            t.get("role1") == "subject" and start < t["idx"] < end
+            t.get("role") == "subject" and start < t["idx"] < end
             for t in parsed
         )
 
@@ -1050,7 +1048,7 @@ def draw_dot_bridge_across_verb_group(parsed):
                 t.get("dep", "").lower() in {"root", "conj", "xcomp", "ccomp"}
             ):
                 has_subject_between = any(
-                    s.get("role1") == "subject" and
+                    s.get("role") == "subject" and
                     s.get("level") == level and
                     idx1 < s["idx"] < t["idx"]
                     for s in parsed
@@ -1150,18 +1148,18 @@ def t(sentence: str):
         morph = token.morph.to_dict()
         idx = token.idx
         text = token.text
-        role1 = next((t.get("role1") for t in parsed if t["idx"] == idx), None)
+        role = next((t.get("role") for t in parsed if t["idx"] == idx), None)
         combine = next((t.get("combine") for t in parsed if t["idx"] == idx), None)
         level = next((t.get("level") for t in parsed if t["idx"] == idx), None)
 
         combine_str = (
-            "[" + ", ".join(f"{c['text']}:{c['role1']}" for c in combine) + "]"
+            "[" + ", ".join(f"{c['text']}:{c['role']}" for c in combine) + "]"
             if combine else "None"
         )
 
         child_texts = [child.text for child in token.children]
 
-        print(f"● idx({idx}), text({text}), role1({role1}), combine({combine_str}), level({level})")
+        print(f"● idx({idx}), text({text}), role({role}), combine({combine_str}), level({level})")
         print(f"  POS({token.pos_}), DEP({token.dep_}), TAG({token.tag_}), HEAD({token.head.text})")
         print(f"  lemma({token.lemma_}), is_stop({token.is_stop}), is_punct({token.is_punct}), is_title({token.is_title})")
         print(f"  morph({morph})")

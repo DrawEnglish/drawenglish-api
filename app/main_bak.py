@@ -680,13 +680,15 @@ def clean_empty_symbol_lines():
         del memory["symbols_by_level"][level]
 
 
-def set_verb_attributes(parsed):
+# 동사덩어리(verb chain) 분석: 시제, 완료, 진행, 수동태, 가정법 등의 도식 저장장
+def analyze_verb_chain(parsed):
     """
-    주절/종속절 구분 및 등위접속사 등장 기준으로 동사 덩어리(verb chain)별
-    시제/상/태 분석 및 도식 기호 생성.
-    결과는 memory["verb_attribute"]에 symbol_map으로 병합 저장됨.
+    동사덩어리(verb chain) 분석: 시제, 완료, 진행, 수동태, 가정법 등을 구조적으로 파악.
+    - 첫 modal 여부에 따라 시제 기호 결정
+    - 첫 modal 이후 첫 AUX는 별도 시제 표시
+    - 완료/진행/수동 구조 분석
+    결과는 memory["verb_attribute"]에 symbol_map으로 저장
     """
-
     memory["verb_attribute_by_chain"] = []
     memory["verb_attribute"] = {}
     sentence_len = memory["sentence_length"]
@@ -695,10 +697,11 @@ def set_verb_attributes(parsed):
     current_chain = []
     last_level = None
 
+    # ✅ 1. 동사덩어리 chain 확보
     for token in parsed:
         level = token.get("level", 0)
 
-        # 등위절 분기 조건: (1) 새 주어, (2) 등위접속사(cc)
+        # 등위절 분기 조건
         if (
             token.get("role") == "subject" or
             (token.get("dep") == "cc" and token.get("pos") == "CCONJ")
@@ -724,40 +727,71 @@ def set_verb_attributes(parsed):
 
     all_symbol_maps = {}
 
-    # 각 verb chain에 대해 분석
+    # ✅ 2. 각 verb chain에 대해 분석
     for chain in chains:
         if not chain:
             continue
 
+        symbol_map = {}
         first = chain[0]
         last = chain[-1]
-        morph = first.get("morph", {})
-
-        # 시제 추출
-        raw_tense = morph.get("Tense")
-        if isinstance(raw_tense, str):
-            tense = raw_tense.lower()
-        elif isinstance(raw_tense, list) and raw_tense:
-            tense = raw_tense[0].lower()
-        else:
-            tense = "pres"
-
-        symbol_map = {}
         aspect = []
-        voice = None
-        symbol_map[first["idx"]] = "|" if tense == "pres" else ">"
 
-        # 중간 조동사 분석
+        # ✅ modal 조동사 확인
+        modal_present = {"will", "shall", "can", "may", "must"}
+        modal_past = {"would", "should", "could", "might"}
+
+        is_modal_first = False
+        first_lemma = first.get("lemma", "").lower()
+
+        if first_lemma in modal_present:
+            symbol_map[first["idx"]] = "|"
+            is_modal_first = True
+            found_first_aux = True
+        elif first_lemma in modal_past:
+            symbol_map[first["idx"]] = ">"
+            is_modal_first = True
+            found_first_aux = True
+
+        # ✅ 3. 첫 modal 이후 첫 AUX를 찾아 시제 설정
+        found_first_aux = False
+        for t in chain[1:]:
+            text_lower = t.get("text", "").lower()
+            if text_lower in {"not", "n't"}:
+                continue
+            if t["pos"] == "AUX":
+                if not found_first_aux:
+                    # modal이 없으면 이 AUX가 시제 표시 대상
+                    if not is_modal_first:
+                        # 시제 판단
+                        tense = get_tense_symbol(t)
+                        if tense:
+                            symbol_map[t["idx"]] = tense
+                    found_first_aux = True
+                # 진행/완료는 다음 loop로
+                continue
+            # VERB 만나면 종료
+            if t["pos"] == "VERB":
+                break
+
+        # ✅ 4. 중간에 낀 조동사 완료/진행 결정정
         for t in chain[1:-1]:
-            if t["lemma"] == "have" or t["text"].lower() == "been":
+            lemma = t.get("lemma", "").lower()
+            text_lower = t.get("text", "").lower()
+
+            # modal 뒤라면 완료/진행 기호 찍지 않음
+            if is_modal_first:
+                continue
+
+            if lemma == "have" or text_lower == "been":
                 symbol_map[t["idx"]] = "P"
                 if "perfect" not in aspect:
                     aspect.append("perfect")
-            elif t["lemma"] == "be" and t.get("tag") == "VBG":
+            elif lemma == "be" and t.get("tag") == "VBG":
                 symbol_map[t["idx"]] = "i"
                 if "progressive" not in aspect:
                     aspect.append("progressive")
-            elif t["text"].lower() == "being":
+            elif text_lower == "being":
                 symbol_map[t["idx"]] = "i"
                 if "progressive" not in aspect:
                     aspect.append("progressive")
@@ -789,121 +823,24 @@ def set_verb_attributes(parsed):
             "verb_chain": [t["text"] for t in chain],
             "symbol_map": symbol_map
         })
-
-        # symbol_map 병합
+        
+        # 전체 symbol_map 통합
         all_symbol_maps.update(symbol_map)
 
-    # 최종 구조에 기존과 동일하게 저장 (호환)
     memory["verb_attribute"] = {
         "symbol_map": all_symbol_maps
     }
 
-def set_modal_attributes(parsed):
+def get_tense_symbol(token):
     """
-    modal 조동사의 시제 및 가정법 여부를 분석하여
-    memory["verb_attribute"]["symbol_map"]에 추가 기호 삽입.
-    - 현재시제: |
-    - 과거시제: >
-    - 가정법:  》 (추론 기준에 따라)
+    token이 조동사일 때 현재/과거 시제 기호 반환
     """
-    if "verb_attribute" not in memory:
-        memory["verb_attribute"] = {}
-
-    symbol_map = memory["verb_attribute"].get("symbol_map", {})
-
-    for token in parsed:
-        if token.get("pos") != "AUX":
-            continue
-        lemma = token.get("lemma", "").lower()
-
-        # 현재시제 modal
-        if lemma in modalVerbs_present:
-            symbol_map[token["idx"]] = "|"
-
-        # 과거시제 modal
-        elif lemma in modalVerbs_past:
-            symbol_map[token["idx"]] = ">"
-
-            # ✅ 가정법 여부 판별
-            is_hypothetical = any(
-                t.get("text").lower() in {"if", "unless", "suppose"} and t.get("dep") in {"mark", "cc"}
-                for t in parsed
-            )
-            if is_hypothetical:
-                symbol_map[token["idx"]] = "》"  # 과거형 가정법으로 덮어쓰기
-
-    # ✅ 보정: modal 뒤 'have' 완료값 제거
-    if "symbol_map" in memory.get("verb_attribute", {}):
-        symbol_map = memory["verb_attribute"]["symbol_map"]
-
-        for token in parsed:
-            if (
-                token.get("text", "").lower() == "have" and
-                token.get("pos") == "AUX" and
-                token.get("morph", {}).get("VerbForm") == "Inf"
-            ):
-                idx = token["idx"]
-                if symbol_map.get(idx):
-                    symbol_map[idx] = " "  # 빈칸으로 제거
-
-
-    # 업데이트
-    memory["verb_attribute"]["symbol_map"] = symbol_map
-
-
-def clean_modal_subject_havebe_tense(parsed):
-    """
-    modal 조동사 뒤에 주어가 오고 그 다음 have/be가 오는 구조에서,
-    have/be가 문법적 연결일 뿐 의미 없는 경우이므로 도식 기호 제거 (빈칸으로).
-    - modal → subject → have/be
-    - modal → not/n't → subject → have/be
-    """
-    if "symbol_map" not in memory.get("verb_attribute", {}):
-        return
-
-    symbol_map = memory["verb_attribute"]["symbol_map"]
-    modal_set = modalVerbs_present | modalVerbs_past
-    negation_words = {"not", "n't"}
-
-    for i in range(len(parsed) - 2):
-        modal = parsed[i]
-
-        # modal + subject + have/be (3단 구조)
-        subj = parsed[i + 1]
-        aux = parsed[i + 2]
-
-        if (
-            modal.get("pos") == "AUX" and
-            modal.get("lemma") in modal_set and
-            subj.get("dep") in ("nsubj", "nsubjpass") and
-            aux.get("pos") == "AUX" and
-            aux.get("lemma") in {"have", "be"}
-        ):
-            idx = aux["idx"]
-            if symbol_map.get(idx):
-                symbol_map[idx] = " "
-
-    for i in range(len(parsed) - 3):
-        modal = parsed[i]
-        maybe_not = parsed[i + 1]
-        subj = parsed[i + 2]
-        aux = parsed[i + 3]
-
-        # modal + not/n't + subject + have/be (4단 구조)
-        if (
-            modal.get("pos") == "AUX" and
-            modal.get("lemma") in modal_set and
-            maybe_not.get("text").lower() in negation_words and
-            subj.get("dep") in ("nsubj", "nsubjpass") and
-            aux.get("pos") == "AUX" and
-            aux.get("lemma") in {"have", "be"}
-        ):
-            idx = aux["idx"]
-            if symbol_map.get(idx):
-                symbol_map[idx] = " "
-
-    # 최종 반영
-    memory["verb_attribute"]["symbol_map"] = symbol_map
+    lemma = token.get("lemma", "").lower()
+    if lemma in {"will", "shall", "can", "may", "must"}:
+        return "|"
+    elif lemma in {"would", "should", "could", "might"}:
+        return ">"
+    return None
 
 
 # ◎ GPT 프롬프트 처리 함수
@@ -983,11 +920,10 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     # ✅ 📍 level 보정: prep-pobj 레벨 통일
     parsed = repair_level_within_prepositional_phrases(parsed)
 
-    set_verb_attributes(parsed)
-    set_modal_attributes(parsed)
-    clean_modal_subject_havebe_tense(parsed)
+    analyze_verb_chain(parsed)
 
     return parsed
+
 
 # GPT API Parsing(with 프롬프트)을 이용하기 위한 함수
 def gpt_parsing_withprompt(tokens: list) -> str:
