@@ -250,7 +250,15 @@ pip freeze > requirements.txt  → 로컬에 파일 만들어지고 아래 것�
   typing_extensions==4.13.2
   uvicorn==0.34.2
 
-★
+★ GCP배포용으로는 
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.5.0/en_core_web_sm-3.5.0-py3-none-any.whl#sha256=0964370218b7e1672a30ac50d72cdc6b16f7c867496f1d60925691188f4d2510
+en-core-web-trf @ https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.5.0/en_core_web_trf-3.5.0-py3-none-any.whl#sha256=8902305d2ced83d98a8e88efd93ea8970a70dda9bb24b0024a8b798d1cc913d5
+위 2개 전부다
+
+★ Render배포용으로는 
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.5.0/en_core_web_sm-3.5.0-py3-none-any.whl#sha256=0964370218b7e1672a30ac50d72cdc6b16f7c867496f1d60925691188f4d2510
+이 한 모델만 적용해서 배포해야함.
+※ en-core-web-trf모델은 Render에 설치 못함(용량 문제)
 
 pip install -r requirements.txt
   이 명령을 로컬에서 실행하면 requirements.txt에 입력된 구성요소들이 로컬에 설치됨
