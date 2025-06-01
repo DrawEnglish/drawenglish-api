@@ -128,6 +128,8 @@ pip install python-dotenv
 
 spaCy 모델 설치
 python -m spacy download en_core_web_sm
+☞정밀도 높은 spacy 버전 설치는 아래 명령으로(더욱 정확하지만 속도는 느림)
+  python -m spacy download en_core_web_trf
 
 
 *fastapi : API를 만들 수 있게 해주는 Python 웹 프레임워크(설계도구)

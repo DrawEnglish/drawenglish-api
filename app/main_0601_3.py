@@ -16,14 +16,7 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 app = FastAPI()  # FastAPI() 객체를 생성해서 이후 라우팅에 사용
-
-try:
-    nlp = spacy.load("en_core_web_trf")
-except OSError:
-    # 없으면 자동 다운로드
-    from spacy.cli import download
-    download("en_core_web_trf")
-    nlp = spacy.load("en_core_web_trf") # small버전은 "en_core_web_sm"
+nlp = spacy.load("en_core_web_sm")  # spaCy 관련 설정, (englihs_core모델_web기반_small)
 
 # ◎ 메모리 구조
 memory = {
