@@ -26,7 +26,7 @@ import importlib
 import app.main 
 
 importlib.reload(app.main)
-from app.main import t
+from app.main import t, t1
 
 
 t1("")

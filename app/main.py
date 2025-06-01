@@ -807,9 +807,11 @@ def set_allverbchunk_attributes(parsed):
         all_symbol_maps.update(symbol_map)
 
     memory["verb_attribute"] = {
-        "symbol_map": all_symbol_maps
-    }
-
+        "symbol_map": all_symbol_maps,
+        "main_verb": main_verb_text,
+        "aspect": main_aspect,
+        "voice": main_voice
+}
 
 # ◎ GPT 프롬프트 처리 함수
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):

@@ -1,2 +1,8 @@
 trigger_deps = ["relcl", "acl", "advcl", "ccomp", "xcomp"]
 
+
+dep
+ccomp 동사의 목적어 명사절
+nsubj, nsubjpass, csubj : 주어 명사절
+attr : noun subject complement
+
