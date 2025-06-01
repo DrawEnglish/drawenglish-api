@@ -1,4 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-echo "▶ Installing dependencies from requirements.txt..."
-pip install --no-cache-dir -r requirements.txt
+# Render 배포용 requirements 복사
+cp requirements_render.txt requirements.txt
+
+# 패키지 설치
+pip install --upgrade pip
+pip install -r requirements.txt

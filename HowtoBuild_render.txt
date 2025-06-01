@@ -181,6 +181,12 @@ async def analyze(request: AnalyzeRequest):
 → 자동으로 Swagger UI 뜨고 /analyze 테스트할 수 있어!
 ※GitHub, Render쪽 아무 작업 없이 웹페이지 생성된 것임.
 
+★★★ .env파일관리
+-------------------
+SPACY_MODEL=en_core_web_trf ☜ GCP에 배포할때
+
+SPACY_MODEL=en_core_web_sm ☜ render에 배포할때
+
 
 ■■■ 2. GitHub에 코드 올리기
 
@@ -244,6 +250,8 @@ pip freeze > requirements.txt  → 로컬에 파일 만들어지고 아래 것�
   typing_extensions==4.13.2
   uvicorn==0.34.2
 
+★
+
 pip install -r requirements.txt
   이 명령을 로컬에서 실행하면 requirements.txt에 입력된 구성요소들이 로컬에 설치됨
   이 파일을 github에 저장해 놓으면 render 같은 서버환경에 파이썬 패키지들을 설치하는 것임
@@ -254,6 +262,10 @@ git commit -m "Add requirements.txt"
 
 ★ git push -u origin main
 ☞ GitHub에 add, commit한 requirements.txt가 올라감
+
+
+
+
 
 
 
