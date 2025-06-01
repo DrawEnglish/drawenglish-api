@@ -18,6 +18,7 @@ git pull origin main  # Git 리모트 변경사항을 로컬PC에 병합
   - render.yaml : 렌더 전용 설정
   - build.sh : 렌더 전용 (spaCy 모델 다운로드)
   - Dockerfile : GCP 전용
+  - cloudbuild.yaml : GCP관련
 
 
 ◎ 로컬 서버(가상환경) 주소

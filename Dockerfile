@@ -11,7 +11,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 5. spaCy 모델 설치 (미리 다운받아두기)
-RUN python -m spacy download en_core_web_sm
+RUN python -m spacy download en_core_web_trf
 
 # 6. 전체 소스 코드 복사
 COPY . .
@@ -20,5 +20,5 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 
 # 8. FastAPI 앱 실행
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
-#CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${PORT}"]
+#CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${PORT}"]
