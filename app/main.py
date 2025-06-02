@@ -18,15 +18,14 @@ client = OpenAI(api_key=api_key)
 
 app = FastAPI()  # FastAPI() 객체를 생성해서 이후 라우팅에 사용
 
-model_name = os.getenv("SPACY_MODEL", "en_core_web_trf")
+model_name = "en_core_web_trf"
 
 try:
     nlp = spacy.load(model_name)
 except OSError:
-    # 없으면 자동 다운로드
+    # 모델이 없으면 다운로드 후 다시 로드
     from spacy.cli import download
     download(model_name)
-
     nlp = spacy.load(model_name)
 
 # ◎ 메모리 구조

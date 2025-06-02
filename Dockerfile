@@ -22,5 +22,5 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 
 # 8. FastAPI 앱 실행
-#CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${PORT}"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+#CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${PORT}"]

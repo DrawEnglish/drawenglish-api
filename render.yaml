@@ -3,7 +3,6 @@ services:
     name: spacy-api
     runtime: python
     buildCommand: |
-      cp requirements_render.txt requirements.txt  # ✅ Render용 requirements 복사
       ./build.sh
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
