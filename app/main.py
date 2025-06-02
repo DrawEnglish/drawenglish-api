@@ -19,7 +19,7 @@ client = OpenAI(api_key=api_key)
 app = FastAPI()  # FastAPI() 객체를 생성해서 이후 라우팅에 사용
 
 # 환경 변수에서 모델명 가져오기, 없으면 'en_core_web_sm' 기본값
-model_name = os.getenv("SPACY_MODEL", "en_core_web_sm")
+model_name = os.getenv("SPACY_MODEL", "en_core_web_trf")
 
 try:
     nlp = spacy.load(model_name)

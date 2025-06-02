@@ -10,11 +10,11 @@ COPY requirements.txt .
 # 4. 의존성 설치
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. spaCy 모델 설치 (미리 다운받아두기)
-RUN python -m spacy download en_core_web_trf
-
-# 6. 전체 소스 코드 복사
+# 5. 전체 소스 코드 복사
 COPY . .
+
+# 6. spaCy 모델 설치 (환경변수 SPACY_MODEL에 따라)
+RUN python -c "import os; import spacy; model = os.getenv('SPACY_MODEL', 'en_core_web_sm'); spacy.cli.download(model)"
 
 # 7. 로그 실시간 출력되도록
 ENV PYTHONUNBUFFERED=1

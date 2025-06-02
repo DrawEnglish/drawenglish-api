@@ -3,6 +3,7 @@ services:
     name: spacy-api
     runtime: python
     buildCommand: |
+      cp requirements_render.txt requirements.txt
       ./build.sh
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
