@@ -1,10 +1,7 @@
 services:
   - type: web
     name: spacy-api
-    runtime: python
-    buildCommand: |
-      cp requirements_render.txt requirements.txt
-      ./build.sh
+    runtime: docker
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
