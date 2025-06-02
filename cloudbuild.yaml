@@ -1,10 +1,10 @@
 steps:
-  # 1️⃣ GCP용 requirements 복사
+  # 1️⃣ 
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
       - -c
-      - cp requirements_gcp.txt requirements.txt  # ✅ GCP용 requirements 복사 (추가)
+      - pip install --upgrade pip && pip install -r requirements.txt
 
   # 2️⃣ Docker 이미지 빌드
   - name: 'gcr.io/cloud-builders/docker'
