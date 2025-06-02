@@ -4,7 +4,7 @@ steps:
     entrypoint: bash
     args:
       - -c
-      - pip install --upgrade pip && pip install -r requirements.txt
+      - pip install --upgrade pip && pip install -r requirements_gcp.txt
 
   # 2️⃣ Docker 이미지 빌드
   - name: 'gcr.io/cloud-builders/docker'

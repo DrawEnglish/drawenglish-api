@@ -2,7 +2,7 @@ services:
   - type: web
     name: spacy-api
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements_render.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
@@ -11,3 +11,6 @@ services:
         value: en_core_web_sm
       - key: OPENAI_API_KEY
         sync: false  # Render Secret에 등록해둘 것
+
+# spaCy sm용 빌드는 requirements_render.txt에서 
+# en-core-web-trf, spacy-transformers, transformers, torch 이 4가지 지워야함.
