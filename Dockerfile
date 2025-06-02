@@ -10,8 +10,6 @@ COPY requirements.txt .
 # 4. 의존성 설치
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN python -m spacy download en_core_web_trf
-
 # 5. spaCy 모델 설치 (미리 다운받아두기)
 RUN python -m spacy download en_core_web_trf
 
