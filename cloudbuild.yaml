@@ -1,21 +1,14 @@
 steps:
-  # 1️⃣ 
-  - name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: bash
-    args:
-      - -c
-      - pip install --upgrade pip && pip install -r requirements_gcp.txt
-
-  # 2️⃣ Docker 이미지 빌드
+  # Docker 이미지 빌드
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/drawenglish-api', '.']
     secretEnv: ['API_KEY']
 
-  # 3️⃣ Docker 이미지 푸시
+  # Docker 이미지 푸시
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/drawenglish-api']
 
-  # 4️⃣ Cloud Run에 배포
+  # Cloud Run에 배포
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
