@@ -555,55 +555,6 @@ def assign_level_triggers(parsed):
 
     return parsed
 
-def is_chunk_subject_trigger(token):
-    """
-    명사절 트리거 조건:
-    SCONJ + mark + IN
-    """
-    return (
-        token.get("pos") == "SCONJ" and
-        token.get("dep") == "mark" and
-        token.get("tag") == "IN"
-    )
-
-def is_chunk_adverb_modifier_trigger(token):
-    """
-    부사절 트리거 조건:
-    SCONJ + mark/advmod + IN/WRB
-    """
-    return (
-        token.get("pos") == "SCONJ" and
-        token.get("dep") in {"mark", "advmod"} and
-        token.get("tag") in {"IN", "WRB"}
-    )
-
-def assign_chunk_role2(parsed):
-    """
-    """
-    for token in parsed:
-        level = token.get("level")
-        if not (isinstance(level, float) and level % 1 == 0.5):
-            continue
-
-        head_idx = token.get("head_idx")
-        head_token = next((t for t in parsed if t["idx"] == head_idx), None)
-
-        if not head_token:
-            continue
-
-        head_dep = head_token.get("dep")
-
-        # ✅ 명사절 체크
-        if head_dep in {"csubj", "nsubj", "nsubjpass"} and is_chunk_subject_trigger(token):
-            token["role2"] = "chunk_subject"
-
-        # ✅ 부사절 체크
-        elif head_dep == "advcl" and is_chunk_adverb_modifier_trigger(token):
-            token["role2"] = "chunk_adverb_modifier"
-
-    return parsed
-
-
 def assign_level_ranges(parsed):
     """
     종속절을 담당하는 dep (relcl, acl, advcl, ccomp, xcomp)에 따라
@@ -737,61 +688,6 @@ def clean_empty_symbol_lines():
 
     for level in keys_to_remove:
         del memory["symbols_by_level"][level]
-
-
-def apply_chunk_function_symbol(parsed):
-    """
-    role2=chunk_subject인 토큰을 기준으로
-    해당 절(start_idx ~ end_idx) 범위에 [ ] 심볼 부여
-    """
-    line_length = memory["sentence_length"]
-    symbols_by_level = memory["symbols_by_level"]
-
-    for token in parsed:
-        role2 = token.get("role2")
-        if not role2:
-            continue
-
-        level = token.get("level")
-        if level is None:
-            continue
-
-        line = symbols_by_level.setdefault(int(level), [" " for _ in range(line_length)])
-
-        start_idx = token["idx"]
-        head_idx = token.get("head_idx")
-        head_token = next((t for t in parsed if t["idx"] == head_idx), None)
-
-        if not head_token:
-            continue
-
-        children_tokens = [child for child in parsed if child.get("head_idx") == head_idx]
-        children_tokens.append(head_token)
-        if not children_tokens:
-            continue
-
-        children_tokens.sort(key=lambda x: x["idx"])
-
-        end_token = children_tokens[-1]
-
-        if end_token.get("pos") == "PUNCT" and len(children_tokens) >= 2:
-            end_token = children_tokens[-2]
-
-        end_idx = end_token["idx"]
-        end_idx_adjusted = end_idx + len(end_token["text"]) - 1
-
-        # ✅ role2에 따라 심볼 다르게
-        if role2 == "chunk_subject":
-            left, right = "[", "]"
-        elif role2 == "chunk_adverb_modifier":
-            left, right = "<", ">"
-        else:
-            continue
-
-        if 0 <= start_idx < line_length:
-            line[start_idx] = left
-        if 0 <= end_idx_adjusted < line_length:
-            line[end_idx_adjusted] = right
 
 
 # 동사덩어리(verb chain) 하나 받아서 시제/상/태 분석하고 symbol_map 반환하는 함수.
@@ -1039,8 +935,6 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
 
     # ✅ 절 분기 트리거 부여 (0.5 level)
     parsed = assign_level_triggers(parsed)
-
-    parsed = assign_chunk_role2(parsed)
 
     print("\n📍 Level trigger check")
     for t in parsed:
@@ -1316,7 +1210,6 @@ def t(sentence: str):
         idx = token.idx
         text = token.text
         role1 = next((t.get("role1") for t in parsed if t["idx"] == idx), None)
-        role2 = next((t.get("role2") for t in parsed if t["idx"] == idx), None)
         combine = next((t.get("combine") for t in parsed if t["idx"] == idx), None)
         level = next((t.get("level") for t in parsed if t["idx"] == idx), None)
 
@@ -1327,8 +1220,8 @@ def t(sentence: str):
 
         child_texts = [child.text for child in token.children]
 
-        print(f"● idx({idx}), text({text}), role1({role1}), role2({role2}), combine({combine_str})")
-        print(f"  level({level}), POS({token.pos_}), DEP({token.dep_}), TAG({token.tag_}), HEAD({token.head.text})")
+        print(f"● idx({idx}), text({text}), role1({role1}), combine({combine_str}), level({level})")
+        print(f"  POS({token.pos_}), DEP({token.dep_}), TAG({token.tag_}), HEAD({token.head.text})")
         print(f"  lemma({token.lemma_}), is_stop({token.is_stop}), is_punct({token.is_punct}), is_title({token.is_title})")
         print(f"  morph({morph})")
         print(f"  children({child_texts})")
@@ -1336,7 +1229,6 @@ def t(sentence: str):
 
     # ✅ 도식화 및 출력
     apply_symbols(parsed)
-    apply_chunk_function_symbol(parsed)
     draw_dot_bridge_across_verb_group(parsed)
     print("🛠 Diagram:")
     print(symbols_to_diagram(sentence))
@@ -1352,7 +1244,6 @@ def t1(sentence: str):
     memory["parsed"] = parsed
     # ✅ 도식화 및 출력
     apply_symbols(parsed)
-    apply_chunk_function_symbol(parsed)
     draw_dot_bridge_across_verb_group(parsed)
     print("🛠 Diagram:")
     print(symbols_to_diagram(sentence))
@@ -1386,7 +1277,6 @@ async def analyze(request: AnalyzeRequest):            # sentence를 받아 다�
     parsed = spacy_parsing_backgpt(request.sentence)               # GPT의 파싱결과를 parsed에 저장
     memory["parsed"] = parsed
     apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
-    apply_chunk_function_symbol(parsed)
     draw_dot_bridge_across_verb_group(parsed)
     return {"sentence": request.sentence,
             "diagramming": symbols_to_diagram(request.sentence),

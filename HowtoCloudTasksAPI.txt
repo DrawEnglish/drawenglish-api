@@ -1,0 +1,24 @@
+■■■Cloud Scheduler + Cloud Task 조합은 GCP 무료 티어로 핑 보내면서 자동으로 Cold Start 방지
+
+▷ Cloud Tasks API 활성화
+
+cmd창에서 아래 두 줄 실행
+gcloud services enable cloudtasks.googleapis.com
+gcloud services enable cloudtasks.googleapis.com
+
+
+▷ Cloud Run 서비스에 'Allow unauthenticated' 여부 확인
+gcloud run services get-iam-policy drawenglish-api --region=us-central1
+
+allUsers: roles/run.invoker 부분이 나오면 Allow unauthenticated 설정된거임.
+
+
+▷ Cloud Scheduler Job 만들기.
+cmd창에서 아래 명령 실행
+아래는 25분 주기로 GCP에 ping 보내는 거임.
+
+gcloud scheduler jobs create http keepalive-job --schedule "*/25 * * * *" --http-method GET --uri "https://drawenglish-api-614338445338.us-central1.run.app/ping" --time-zone "Asia/Seoul" --location=us-central1
+
+▷ Cloud Scheduler에서 잘 성정되었는지 최종 확인
+
+https://console.cloud.google.com/cloudscheduler?referrer=search&inv=1&invt=AbzFRw&project=drawenglish-api
