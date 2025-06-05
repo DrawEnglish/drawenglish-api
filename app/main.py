@@ -121,10 +121,20 @@ modalVerbs_all = modalVerbs_present | modalVerbs_past
 
 beVerbs = {"be", "am", "are", "is", "was", "were", "been", "being"}
 
-notbeLinkingVerbs = {
-    "become", "come", "get", "turn", "go", "grow", "fall",
-    "listen", "sound", "look", "smell", "taste", "feel", "seem"
+notbeLinkingVerbs_onlySVC = {
+    "become", "come", "go", "fall", "sound", "look", "smell", "taste", "seem"
 }
+notbeLinkingVerbs_SVCSVO = {
+    "get", "turn", "grow", "feel"
+}
+netbeLinkingVerbs_all = notbeLinkingVerbs_SVCSVO | notbeLinkingVerbs_onlySVC
+
+dativeVerbs = {
+    "give", "send", "offer", "show", "lend", "teach", "tell", "write", "read", "promise",
+    "sell", "pay", "pass", "bring", "buy", "ask", "award", "grant", "feed", "hand", "leave", "save", 
+    "bring", "bake", "build", "cook", "sing", "make"  # dative verb로 사용 드문 것들
+}
+
 
 # spaCy가 전치사로 오인 태깅하는 특수 단어들
 blacklist_preposition_words = {"due", "according"}
@@ -520,6 +530,37 @@ def guess_combine(token, all_tokens):
     return combine if combine else None
 
 
+def NounChunk_combine_to_uplevel(parsed):
+    """
+    명사덩어리가 object / direct object / noun subject complement 역할일때
+    상위 level에 연결해주는 함수
+    """
+    for token in parsed:
+        role2 = token.get("role2")
+        if role2 not in {"object", "direct object", "noun subject complement"}:
+            continue
+
+        head_idx = token.get("head_idx")
+        head_token = next((t for t in parsed if t["idx"] == head_idx), None)
+        if not head_token or head_token.get("dep") != "ccomp":
+            continue
+
+        # head의 head (즉 상위 verb)
+        head2_idx = head_token.get("head_idx")
+        head2_token = next((t for t in parsed if t["idx"] == head2_idx), None)
+        if not head2_token:
+            continue
+
+        # 🔥 상위 verb의 combine에 추가
+        if "combine" not in head2_token or not head2_token["combine"]:
+            head2_token["combine"] = []
+
+        head2_token["combine"].append({
+            "text": token["text"],
+            "role2": role2,
+            "idx": token["idx"]
+        })
+
 
 def assign_level_triggers(parsed):
     """
@@ -555,20 +596,26 @@ def assign_level_triggers(parsed):
 
     return parsed
 
-def is_chunk_subject_trigger(token):
+def is_chunk_nounclause_trigger(token):
     """
-    명사절 트리거 조건:
+    명사절 첫단어 트리거 조건:
     SCONJ + mark + IN
     """
-    return (
-        token.get("pos") == "SCONJ" and
-        token.get("dep") == "mark" and
-        token.get("tag") == "IN"
-    )
+    if token.get("pos") == "SCONJ" and token.get("dep") == "mark" and token.get("tag") == "IN":
+        return True
 
-def is_chunk_adverb_modifier_trigger(token):
+    # to 부정사
+    if (
+        token.get("pos") == "PART" and token.get("dep") == "aux" and token.get("tag") == "TO" and
+        token.get("lemma", "").lower() == "to"
+    ):
+        return True
+
+    return False
+
+def is_chunk_adverbclause_trigger(token):
     """
-    부사절 트리거 조건:
+    부사절 첫단어 트리거 조건:
     SCONJ + mark/advmod + IN/WRB
     """
     return (
@@ -577,8 +624,10 @@ def is_chunk_adverb_modifier_trigger(token):
         token.get("tag") in {"IN", "WRB"}
     )
 
+
 def assign_chunk_role2(parsed):
     """
+    명사절/부사절 role2 부여 (친구 로직 완벽 반영)
     """
     for token in parsed:
         level = token.get("level")
@@ -593,12 +642,78 @@ def assign_chunk_role2(parsed):
 
         head_dep = head_token.get("dep")
 
+        # ✅ 1. 명사절 판단
+        if head_dep in {"ccomp", "xcomp"} and is_chunk_nounclause_trigger(token):
+
+            # head의 head 찾기
+            head2_idx = head_token.get("head_idx")
+            head2_token = next((t for t in parsed if t["idx"] == head2_idx), None)
+
+            if not head2_token:
+                continue
+
+            head2_lemma = head2_token.get("lemma", "")
+
+            # ✅ 1) 보어 판단
+            if head2_lemma in beVerbs or head2_lemma in notbeLinkingVerbs_onlySVC:
+                token["role2"] = "noun subject complement"
+
+            # ✅ 2) 직접목적어 판단
+            elif head2_lemma in dativeVerbs:
+                current_level = int(token.get("level", 0))  # 0.5 -> 0
+                # 현재 레벨의 토큰들
+                level_tokens = [t for t in parsed if int(t.get("level", -1)) == current_level]
+                has_obj_or_iobj = any(
+                    t.get("role1") in {"object", "indirect object"} for t in level_tokens
+                )
+                if has_obj_or_iobj:
+                    token["role2"] = "direct object"
+                else:
+                    token["role2"] = "object"
+
+            # ✅ 3) 기본 목적어 처리
+            else:
+                token["role2"] = "object"
+
+            # ✅ 끝단어에 ] 찍기
+            # 명사절 끝단어 구하기
+            children_tokens = [child for child in parsed if child.get("head_idx") == head_idx]
+            children_tokens.append(head_token)
+
+            if not children_tokens:
+                continue
+
+            # idx 기준 정렬
+            children_tokens.sort(key=lambda x: x["idx"])
+
+            end_token = children_tokens[-1]
+
+            # 마지막 토큰이 구두점이면 제외
+            if end_token.get("pos") == "PUNCT" and len(children_tokens) >= 2:
+                end_token = children_tokens[-2]
+
+            end_idx = end_token.get("idx")
+            end_text = end_token.get("text", "")
+
+            # 끝글자에 ] 심볼 추가
+            end_idx_adjusted = end_idx + len(end_text) - 1
+            level_num = int(level)
+
+            line_length = memory["sentence_length"]
+            symbols_by_level = memory["symbols_by_level"]
+
+            line = symbols_by_level.setdefault(level_num, [" " for _ in range(line_length)])
+
+            # 명사덩어리 맨끝단어 맨끝글자에 ]로 마감해준다(목적어/보어 모두).
+            if 0 <= end_idx_adjusted < line_length:
+                line[end_idx_adjusted] = "]"
+
         # ✅ 명사절 체크
-        if head_dep in {"csubj", "nsubj", "nsubjpass"} and is_chunk_subject_trigger(token):
+        if head_dep in {"csubj", "nsubj", "nsubjpass"} and is_chunk_nounclause_trigger(token):
             token["role2"] = "chunk_subject"
 
         # ✅ 부사절 체크
-        elif head_dep == "advcl" and is_chunk_adverb_modifier_trigger(token):
+        if head_dep == "advcl" and is_chunk_adverbclause_trigger(token):
             token["role2"] = "chunk_adverb_modifier"
 
     return parsed
@@ -1277,6 +1392,8 @@ def t(sentence: str):
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
 
+    NounChunk_combine_to_uplevel(parsed)
+
     # ✅ 동사덩어리 분석: 시제/상/태 출력
     verb_chain = [t for t in parsed if t["pos"] in {"AUX", "VERB"}]
     if verb_chain:
@@ -1321,9 +1438,12 @@ def t(sentence: str):
         level = next((t.get("level") for t in parsed if t["idx"] == idx), None)
 
         combine_str = (
-            "[" + ", ".join(f"{c['text']}:{c['role1']}" for c in combine) + "]"
+            "[" + ", ".join(
+                f"{c['text']}:{c.get('role1') or c.get('role2') or 'None'}"
+                for c in combine
+            ) + "]"
             if combine else "None"
-        )
+)
 
         child_texts = [child.text for child in token.children]
 
@@ -1350,6 +1470,7 @@ def t1(sentence: str):
     # ✅ spaCy 파싱 + 역할 분석
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
+    NounChunk_combine_to_uplevel(parsed)
     # ✅ 도식화 및 출력
     apply_symbols(parsed)
     apply_chunk_function_symbol(parsed)

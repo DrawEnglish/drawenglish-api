@@ -1,5 +1,6 @@
 import os, json, re
 import spacy
+import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse  # render에 10분 단위 Ping 보내기를 위해 추가
 from pydantic import BaseModel
@@ -16,13 +17,17 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 app = FastAPI()  # FastAPI() 객체를 생성해서 이후 라우팅에 사용
-nlp = spacy.load("en_core_web_sm")  # spaCy 관련 설정, (englihs_core모델_web기반_small)
 
-# ◎ 메모리 구조
-memory = {
-#    "characters": [],
-    "symbols_by_level": {},
-}
+# 환경 변수에서 모델명 가져오기, 없으면 'en_core_web_sm' 기본값
+model_name = os.getenv("SPACY_MODEL", "en_core_web_sm")
+
+try:
+    nlp = spacy.load(model_name)
+except OSError:
+    # 모델이 없으면 다운로드 후 다시 로드
+    from spacy.cli import download
+    download(model_name)
+    nlp = spacy.load(model_name)
 
 # ◎ 심볼 매핑
 role_to_symbol = {
@@ -38,6 +43,54 @@ role_to_symbol = {
     "noun object complement": "[",
     "adjective object complement": "("
 }
+
+verb_attr_symbol = {
+    "present tense": "|",
+    "past tense": ">",
+    "perfect aspect": "P",
+    "progressive aspect": "i",
+    "passive voice": "^",
+    "subjunctive mood": "》"
+}
+
+verbals_symbol = {
+    "R": "@",          # bare infinitive or root
+    "to R": "to@",     # to infinitive
+    "R-ing": "@ing",   # gerund or present participle
+    "R-ed": "@ed"      # past participle
+}
+
+relative_words_symbol = {
+    "relative pronoun": "[X]",
+    "relative adjective": "(_)",
+    "relative adverb": "<_>",
+    "compound relative pronoun": "[e]",
+    "compound relative adjective": "(e)",
+    "compound relative adverb": "<e>",
+    "interrogative pronoun": "[?]",
+    "interrogative adjective": "(?)",
+    "interrogative adverb": "<?>"
+}
+
+# 전체 심볼 통합 딕셔너리
+symbols = {
+    "role": role_to_symbol,
+    "verb_attr": verb_attr_symbol,
+    "verbals": verbals_symbol,
+    "relatives": relative_words_symbol
+}
+
+# ◎ 메모리 구조 / 메모리 초기화화
+memory = {
+    "symbols_by_level": {},
+    "symbols": symbols
+}
+
+
+# level 발생 트리거 dep 목록 (전역으로 통일)
+level_trigger_deps = [
+    "relcl", "acl", "advcl", "advmodcl", "ccomp", "xcomp", "csubj", "parataxis"
+]
 
 # 📘 보어가 **명사만** 가능한 SVOC 동사
 SVOC_noun_only = {
@@ -66,6 +119,12 @@ modalVerbs_present = {"will", "shall", "can", "may", "must"}
 modalVerbs_past = {"would", "should", "could", "might"}
 modalVerbs_all = modalVerbs_present | modalVerbs_past
 
+beVerbs = {"be", "am", "are", "is", "was", "were", "been", "being"}
+
+notbeLinkingVerbs = {
+    "become", "come", "get", "turn", "go", "grow", "fall",
+    "listen", "sound", "look", "smell", "taste", "feel", "seem"
+}
 
 # spaCy가 전치사로 오인 태깅하는 특수 단어들
 blacklist_preposition_words = {"due", "according"}
@@ -89,11 +148,13 @@ def rule_based_parse(tokens):
     result = []
     for t in tokens:
         t["children"] = [c["idx"] for c in tokens if c["head_idx"] == t["idx"]]
+        t["role1"] = None
+        t["role2"] = None
 
         # role 추론
-        role = guess_role(t, tokens)
-        if role:
-            t["role"] = role  # combine에서 쓰일 수 있음
+        role1 = guess_role(t, tokens)
+        if role1:
+            t["role1"] = role1  # combine에서 쓰일 수 있음
 
     # 'name'과 같은 동사가 있는 SVOC구조에서 목적보어를 잘못 태깅하는 것 보정 함수
     result = tokens  # 기존 tokens을 수정하며 계속 사용
@@ -105,9 +166,9 @@ def rule_based_parse(tokens):
     return result
 
 
-# role 추론 함수수
+# role 추론 함수
 def guess_role(t, all_tokens=None):  # all_tokens 추가 필요
-    dep = t["dep"]
+    dep = t.get("dep")
     pos = t["pos"]
     head_idx = t.get("head_idx")
 
@@ -116,12 +177,12 @@ def guess_role(t, all_tokens=None):  # all_tokens 추가 필요
         return "subject"
 
     # ✅ Main Verb: be동사 포함, 종속절도 고려
-    if pos in ["VERB", "AUX"] and dep in ["ROOT", "ccomp", "advcl", "acl", "relcl"]:
+    if pos in ["VERB", "AUX"] and (dep in level_trigger_deps or dep == "root"):
         return "verb"
 
     # ✅ 등위접속사 다음 병렬 동사 (conj)도 verb role 부여
     if pos == "VERB" and dep == "conj":
-        if any(t["idx"] == head_idx and t.get("role") == "verb" for t in all_tokens):
+        if any(t["idx"] == head_idx and t.get("role1") == "verb" for t in all_tokens):
             return "verb"
 
 
@@ -155,7 +216,7 @@ def guess_role(t, all_tokens=None):  # all_tokens 추가 필요
     if dep == "pobj":
         head_token = next((t for t in all_tokens if t["idx"] == head_idx), None)
         if head_token and (
-            head_token.get("role") == "preposition"
+            head_token.get("role1") == "preposition"
             or (
                 head_token["text"].lower() in blacklist_preposition_words and
                 (
@@ -209,7 +270,7 @@ def recover_direct_object_from_indirect(parsed):
     SVOO 문장에서 indirect object에 대해 appos 구조의 direct object를 복원
     """
     for token in parsed:
-        if token.get("role") == "indirect object":
+        if token.get("role1") == "indirect object":
             token_idx = token.get("idx")
 
             for child in parsed:
@@ -218,7 +279,7 @@ def recover_direct_object_from_indirect(parsed):
                     child.get("dep") == "appos" and
                     child.get("pos") in {"NOUN", "PROPN"}
                 ):
-                    child["role"] = "direct object"
+                    child["role1"] = "direct object"
                     break
 
     return parsed
@@ -255,7 +316,7 @@ def assign_noun_complement_for_SVOC_noun_only(parsed):
                     t.get("dep") in ["nsubj", "nmod", "attr", "appos", "npadvmod", "ccomp"] and
                     t.get("pos") in ["NOUN", "PROPN"]
                 ):
-                    t["role"] = "noun object complement"
+                    t["role1"] = "noun object complement"
                     applied = True
                     break
 
@@ -289,7 +350,7 @@ def assign_adj_object_complement_when_compound_object(parsed):
                     for c in children
                 )
                 if has_compound:
-                    t["role"] = "adjective object complement"
+                    t["role1"] = "adjective object complement"
 
     return parsed
 
@@ -310,7 +371,7 @@ def assign_adj_complement_for_advcl_adjective(parsed):
 
         # 1. object 있는지 먼저 확인
         obj = next(
-            (t for t in parsed if t.get("head_idx") == verb_idx and t.get("role") in ["object", "direct object"]),
+            (t for t in parsed if t.get("head_idx") == verb_idx and t.get("role1") in ["object", "direct object"]),
             None
         )
         if not obj:
@@ -326,14 +387,14 @@ def assign_adj_complement_for_advcl_adjective(parsed):
                 t.get("dep") == "advcl" and
                 t.get("pos") == "ADJ"
             ):
-                t["role"] = "adjective object complement"
+                t["role1"] = "adjective object complement"
     return parsed
 
 
 # 목적보어(object complement)가 있는데, 앞쪽 목적어를 nsubj(subject)로 잘못 태깅하는 경우 예외처리
 def repair_object_from_complement(parsed):
     for item in parsed:
-        if item.get("role") in ["noun object complement", "adjective object complement"]:
+        if item.get("role1") in ["noun object complement", "adjective object complement"]:
             complement_children = item.get("children", [])
             
             # ✅ 동사 기준 가장 가까운 compound 중 object 후보 필터링
@@ -350,30 +411,30 @@ def repair_object_from_complement(parsed):
             if compound_candidates:
                 # 🔹 가장 낮은 idx (동사에 가까운 단어) 선택
                 compound_candidates.sort(key=lambda x: x["idx"])
-                compound_candidates[0]["role"] = "object"
+                compound_candidates[0]["role1"] = "object"
 
             # 보완: 종종 주어를 object로 잘못 넣기도 함 (이건 그대로 유지)
             for t in parsed:
                 if t.get("dep") == "nsubj" and t.get("idx") in complement_children:
-                    t["role"] = "object"
+                    t["role1"] = "object"
 
     return parsed
 
 
 # combine 추론 함수
 def guess_combine(token, all_tokens):
-    role = token.get("role")
+    role1 = token.get("role1")
     idx = token.get("idx")
     combine = []
 
     # ✅ Verb → object / complement (SVO, SVC)
-    if role == "verb":
+    if role1 == "verb":
         for t in all_tokens:
             if (
                 t.get("head_idx") == idx
                 and t["idx"] > idx  # 🔧 오른쪽 방향 연결만 허용
             ):
-                r = t.get("role")
+                r = t.get("role1")
                 if r in [
                     "object",
                     "indirect object",
@@ -382,37 +443,37 @@ def guess_combine(token, all_tokens):
                     "noun object complement",
                     "adjective object complement"  # 🔧 보어도 연결되게!
                 ]:
-                    combine.append({"text": t["text"], "role": r, "idx": t["idx"]})
+                    combine.append({"text": t["text"], "role1": r, "idx": t["idx"]})
                     # ✅ 보완: indirect object가 자식 갖고 있으면 그 중 direct object도 연결
                     if r == "indirect object":
                         children = [c for c in all_tokens if c.get("head_idx") == t["idx"]]
                         for c in children:
                             if (
-                                c.get("role") in ["direct object", "object"]
+                                c.get("role1") in ["direct object", "object"]
                                 and c["idx"] > t["idx"]  # 🔧 핵심 추가
                             ):
-                                combine.append({"text": c["text"], "role": c["role"], "idx": c["idx"]})
+                                combine.append({"text": c["text"], "role1": c["role1"], "idx": c["idx"]})
 
     # ✅ Indirect object → direct object (SVOO 구조)
-    if role == "indirect object":
+    if role1 == "indirect object":
         for t in all_tokens:
             if (
-                t.get("role") in ["direct object"] and
+                t.get("role1") in ["direct object"] and
                 t.get("head_idx") == token.get("head_idx")
                 and t["idx"] > token["idx"]  # 🔧 오른쪽 방향만 연결
             ):
-                combine.append({"text": t["text"], "role": "direct object", "idx": t["idx"]})
+                combine.append({"text": t["text"], "role1": "direct object", "idx": t["idx"]})
 
     # ✅ Object → object complement (SVOC 구조)
-    if role == "object":
+    if role1 == "object":
         for t in all_tokens:
-            t_role = t.get("role") or ""
+            t_role = t.get("role1") or ""
             if "object complement" in t_role:
                 if (
                     t.get("head_idx") == idx or
                     idx == t.get("head_idx")
                 ):
-                    combine.append({"text": t["text"], "role": t["role"], "idx": t["idx"]})
+                    combine.append({"text": t["text"], "role1": t["role1"], "idx": t["idx"]})
                     continue
 
                 # 🔹 추가 연결 조건: 보어가 object보다 뒤에 있고, head는 동일한 동사
@@ -422,18 +483,18 @@ def guess_combine(token, all_tokens):
                     t.get("pos") == "ADJ" and
                     t.get("head_idx") == token.get("head_idx")
                 ):
-                    combine.append({"text": t["text"], "role": t["role"], "idx": t["idx"]})
+                    combine.append({"text": t["text"], "role1": t["role1"], "idx": t["idx"]})
 
     # ✅ Preposition → prepositional object
-    if role == "preposition":
+    if role1 == "preposition":
         for t in all_tokens:
-            if t.get("head_idx") == idx and t.get("role") == "prepositional object":
-                combine.append({"text": t["text"], "role": "prepositional object", "idx": t["idx"]})
+            if t.get("head_idx") == idx and t.get("role1") == "prepositional object":
+                combine.append({"text": t["text"], "role1": "prepositional object", "idx": t["idx"]})
 
         # 2️⃣ 예외 보정: head가 due/according인데, 이 token이 그 뒤의 "to"일 경우
     for t in all_tokens:
         if (
-            t.get("role") == "prepositional object" and
+            t.get("role1") == "prepositional object" and
             t.get("head_idx") in [
                 b["idx"] for b in all_tokens if b["text"].lower() in blacklist_preposition_words
             ]
@@ -453,7 +514,7 @@ def guess_combine(token, all_tokens):
 
             # ✅ 이 token이 그 "to"일 경우만 연결
             if to_token and to_token["idx"] == idx:
-                combine.append({"text": t["text"], "role": t["role"], "idx": t["idx"]})
+                combine.append({"text": t["text"], "role1": t["role1"], "idx": t["idx"]})
 
     # ✅ combine 있을 경우만 반환
     return combine if combine else None
@@ -468,10 +529,9 @@ def assign_level_triggers(parsed):
     - relcl, advcl, ccomp, xcomp: children 중 가장 앞에 오는 토큰
     - acl: 트리거 단어 자신
     """
-    trigger_deps = ["relcl", "acl", "advcl", "ccomp", "xcomp"]
 
     for token in parsed:
-        if token["dep"] not in trigger_deps:
+        if token["dep"] not in level_trigger_deps:
             continue
 
         if not is_valid_clause_trigger(token):
@@ -495,6 +555,55 @@ def assign_level_triggers(parsed):
 
     return parsed
 
+def is_chunk_subject_trigger(token):
+    """
+    명사절 트리거 조건:
+    SCONJ + mark + IN
+    """
+    return (
+        token.get("pos") == "SCONJ" and
+        token.get("dep") == "mark" and
+        token.get("tag") == "IN"
+    )
+
+def is_chunk_adverb_modifier_trigger(token):
+    """
+    부사절 트리거 조건:
+    SCONJ + mark/advmod + IN/WRB
+    """
+    return (
+        token.get("pos") == "SCONJ" and
+        token.get("dep") in {"mark", "advmod"} and
+        token.get("tag") in {"IN", "WRB"}
+    )
+
+def assign_chunk_role2(parsed):
+    """
+    """
+    for token in parsed:
+        level = token.get("level")
+        if not (isinstance(level, float) and level % 1 == 0.5):
+            continue
+
+        head_idx = token.get("head_idx")
+        head_token = next((t for t in parsed if t["idx"] == head_idx), None)
+
+        if not head_token:
+            continue
+
+        head_dep = head_token.get("dep")
+
+        # ✅ 명사절 체크
+        if head_dep in {"csubj", "nsubj", "nsubjpass"} and is_chunk_subject_trigger(token):
+            token["role2"] = "chunk_subject"
+
+        # ✅ 부사절 체크
+        elif head_dep == "advcl" and is_chunk_adverb_modifier_trigger(token):
+            token["role2"] = "chunk_adverb_modifier"
+
+    return parsed
+
+
 def assign_level_ranges(parsed):
     """
     종속절을 담당하는 dep (relcl, acl, advcl, ccomp, xcomp)에 따라
@@ -506,13 +615,11 @@ def assign_level_ranges(parsed):
     그리고 마지막에 level=None인 토큰들에 대해 level=0을 부여한다.
     """
 
-    clause_deps = ["relcl", "acl", "advcl", "ccomp", "xcomp"]
-
     current_level = 1  # 시작은 1부터 (0은 최상위 절용)
 
     for token in parsed:
         dep = token.get("dep")
-        if dep not in clause_deps:
+        if dep not in level_trigger_deps:
             continue
         
         if not is_valid_clause_trigger(token):
@@ -562,15 +669,13 @@ def is_valid_clause_trigger(token: dict) -> bool:
     향후 조건이 더 생기면 여기에 추가합니다.
     """
     dep = token.get("dep")
-    role = token.get("role")
+    role1 = token.get("role1")
     pos = token.get("pos") 
 
-    clause_deps = ["ccomp", "xcomp", "advcl", "acl", "relcl"]
-
-    if dep not in clause_deps:
+    if dep not in level_trigger_deps:
         return False
 
-    if role in ["adjective object complement", "noun object complement"]:
+    if role1 in ["adjective object complement", "noun object complement"]:
         return False
 
     # ✅ 예외: ADJ인데 dep=advcl 인 경우는 절 아님
@@ -620,52 +725,6 @@ def repair_level_within_prepositional_phrases(parsed):
     return parsed
 
 
-# 처음 나오는 조동사와 본동사 사이를 .(점)으로 연결 시켜줌, 레벨 순회하며(다른 레벨간 연결할일 없음), 기존 도형 있으면 안찍음
-def apply_aux_to_mverb_bridge_symbols_each_levels(parsed, sentence):
-
-    for modal_token in [t for t in parsed if t["pos"] == "AUX" and t["dep"] in {"aux", "auxpass"}]:
-        level = modal_token.get("level")
-        if level is None:
-            continue
-
-        line = memory["symbols_by_level"].get(level)
-        if not line:
-            continue
-
-        modal_idx = modal_token["idx"]
-
-        # ✅ 조동사 이후에 나오는 첫 번째 본동사(verb role)
-        verb_token = next(
-            (t for t in parsed
-             if t.get("role") == "verb"
-             and t.get("level") == level
-             and t["idx"] > modal_idx),
-            None
-        )
-        if not verb_token:
-            continue
-
-        verb_idx = verb_token["idx"]
-        start, end = sorted([modal_idx, verb_idx])
-
-        # ✅ 의문문 판단
-        has_subject_between = any(
-            t.get("role") == "subject" and start < t["idx"] < end
-            for t in parsed
-        )
-
-        if has_subject_between:
-            if line[modal_idx] == " ":
-                line[modal_idx] = "∩"
-        else:
-            if line[modal_idx] == " ":
-                line[modal_idx] = "."
-
-        for i in range(start + 1, end):
-            if line[i] == " ":
-                line[i] = "."
-
-
 # 아무 심볼도 안 찍힌 줄이면 memory에서 아예 제거
 def clean_empty_symbol_lines():
     """
@@ -680,15 +739,171 @@ def clean_empty_symbol_lines():
         del memory["symbols_by_level"][level]
 
 
-# 동사덩어리(verb chain) 분석: 시제, 완료, 진행, 수동태, 가정법 등의 도식 저장장
-def analyze_verb_chain(parsed):
+def apply_chunk_function_symbol(parsed):
     """
-    동사덩어리(verb chain) 분석: 시제, 완료, 진행, 수동태, 가정법 등을 구조적으로 파악.
-    - 첫 modal 여부에 따라 시제 기호 결정
-    - 첫 modal 이후 첫 AUX는 별도 시제 표시
-    - 완료/진행/수동 구조 분석
-    결과는 memory["verb_attribute"]에 symbol_map으로 저장
+    role2=chunk_subject인 토큰을 기준으로
+    해당 절(start_idx ~ end_idx) 범위에 [ ] 심볼 부여
     """
+    line_length = memory["sentence_length"]
+    symbols_by_level = memory["symbols_by_level"]
+
+    for token in parsed:
+        role2 = token.get("role2")
+        if not role2:
+            continue
+
+        level = token.get("level")
+        if level is None:
+            continue
+
+        line = symbols_by_level.setdefault(int(level), [" " for _ in range(line_length)])
+
+        start_idx = token["idx"]
+        head_idx = token.get("head_idx")
+        head_token = next((t for t in parsed if t["idx"] == head_idx), None)
+
+        if not head_token:
+            continue
+
+        children_tokens = [child for child in parsed if child.get("head_idx") == head_idx]
+        children_tokens.append(head_token)
+        if not children_tokens:
+            continue
+
+        children_tokens.sort(key=lambda x: x["idx"])
+
+        end_token = children_tokens[-1]
+
+        if end_token.get("pos") == "PUNCT" and len(children_tokens) >= 2:
+            end_token = children_tokens[-2]
+
+        end_idx = end_token["idx"]
+        end_idx_adjusted = end_idx + len(end_token["text"]) - 1
+
+        # ✅ role2에 따라 심볼 다르게
+        if role2 == "chunk_subject":
+            left, right = "[", "]"
+        elif role2 == "chunk_adverb_modifier":
+            left, right = "<", ">"
+        else:
+            continue
+
+        if 0 <= start_idx < line_length:
+            line[start_idx] = left
+        if 0 <= end_idx_adjusted < line_length:
+            line[end_idx_adjusted] = right
+
+
+# 동사덩어리(verb chain) 하나 받아서 시제/상/태 분석하고 symbol_map 반환하는 함수.
+def set_verbchunk_attributes(chain):
+
+    symbol_map = {}
+    aspect = []
+    voice = None
+
+    if not chain:
+        return symbol_map, aspect, voice
+
+    verb_attr = memory["symbols"]["verb_attr"]
+
+    # 맨 앞 토큰
+    first = chain[0]
+    first_lemma = first.get("lemma", "").lower()
+    first_pos = first.get("pos")
+    first_dep = first.get("dep")
+    first_tag = first.get("tag")
+
+    # ✅ P1. 맨앞 modal 여부
+    if first_pos == "AUX" and first_dep == "aux" and first_tag == "MD":
+        if first_lemma in modalVerbs_present:
+            symbol_map[first["idx"]] = verb_attr["present tense"]
+        elif first_lemma in modalVerbs_past:
+            symbol_map[first["idx"]] = verb_attr["past tense"]
+
+    # ✅ P2. 중간 조동사들 처리
+    for t in chain:
+        pos = t.get("pos")
+        dep = t.get("dep")
+        tag = t.get("tag")
+        text = t.get("text", "").lower()
+
+        # aux, auxpass만 조동사
+        if not (pos == "AUX" and dep in {"aux", "auxpass"}):
+            break  # 조동사 아니면 (즉 본동사) -> P3로
+
+        # 조동사 시제 (fin)
+        verbform = t.get("morph", {}).get("VerbForm", "")
+        tense = t.get("morph", {}).get("Tense", "")
+
+        if verbform == "Fin":
+            if tag in {"VBP", "VBZ"} or tense == "Pres":
+                symbol_map[t["idx"]] = verb_attr["present tense"]
+            elif tag == "VBD" or tense == "Past":
+                symbol_map[t["idx"]] = verb_attr["past tense"]
+
+        # 완료, 진행
+        if text == "been" and tag == "VBN":
+            symbol_map[t["idx"]] = verb_attr["perfect aspect"]
+            if "perfect" not in aspect:
+                aspect.append("perfect")
+        elif text == "being" and tag == "VBG":
+            symbol_map[t["idx"]] = verb_attr["progressive aspect"]
+            if "progressive" not in aspect:
+                aspect.append("progressive")
+
+        # 원형 조동사(VB, Inf)는 아무것도 안찍고 continue
+        if tag == "VB" and verbform == "Inf":
+            continue
+
+    # ✅ P3. 본동사 처리
+    last = chain[-1]
+    pos = last.get("pos")
+    dep = last.get("dep")
+    tag = last.get("tag")
+    lemma = last.get("lemma", "").lower()
+
+    if dep in level_trigger_deps or dep == "root":
+        verbform = last.get("morph", {}).get("VerbForm", "")
+        tense = last.get("morph", {}).get("Tense", "")
+
+        print(f"[DEBUG] Last verb: {last['text']}, verbform: {verbform}, tense: {tense}")
+
+        if verbform == "Fin":
+            if tag in {"VBP", "VBZ"} or tense == "Pres":
+                symbol_map[last["idx"]] = verb_attr["present tense"]
+                print(f"[DEBUG] Set symbol: idx({last['idx']}), symbol({symbol_map.get(last['idx'])})")
+            elif tag == "VBD" or tense == "Past":
+                symbol_map[last["idx"]] = verb_attr["past tense"]
+                print(f"[DEBUG] Set symbol: idx({last['idx']}), symbol({symbol_map.get(last['idx'])})")
+
+
+        # 완료/수동/진행
+        if tag == "VBN":
+            # 왼쪽으로 AUX aux/auxpass 찾아야 해
+            for prev in reversed(chain[:-1]):
+                if prev.get("pos") != "AUX":
+                    continue
+                prev_dep = prev.get("dep")
+                prev_lemma = prev.get("lemma", "").lower()
+                if prev_dep == "aux" and prev_lemma == "have":
+                    symbol_map[last["idx"]] = verb_attr["perfect aspect"]
+                    if "perfect" not in aspect:
+                        aspect.append("perfect")
+                    break
+                elif prev_dep == "auxpass" and prev_lemma == "be":
+                    symbol_map[last["idx"]] = verb_attr["passive voice"]
+                    voice = "passive"
+                    break
+
+        elif tag == "VBG":
+            symbol_map[last["idx"]] = verb_attr["progressive aspect"]
+            if "progressive" not in aspect:
+                aspect.append("progressive")
+
+    return symbol_map, aspect, voice
+
+# 문장의 전체 parsed 결과를 받아 동사덩어리별 시제/상/태 분석.
+def set_allverbchunk_attributes(parsed):
     memory["verb_attribute_by_chain"] = []
     memory["verb_attribute"] = {}
     sentence_len = memory["sentence_length"]
@@ -697,28 +912,30 @@ def analyze_verb_chain(parsed):
     current_chain = []
     last_level = None
 
-    # ✅ 1. 동사덩어리 chain 확보
+    # 동사덩어리 분리
     for token in parsed:
         level = token.get("level", 0)
 
-        # 등위절 분기 조건
+        if last_level is None:
+            last_level = level
+
+        # 등위접속사가 나오면 동사덩어리 끊음 (종속접속사는 level 발생 부분에서 처리 가능)
         if (
-            token.get("role") == "subject" or
-            (token.get("dep") == "cc" and token.get("pos") == "CCONJ")
+            token.get("dep") in {"cc"} and token.get("pos") in {"CCONJ", "CONJ"}
         ):
             if current_chain:
                 chains.append(current_chain)
                 current_chain = []
             last_level = level
 
-        # 종속절 level 변화 시에도 분리
+        # level 바뀔 때 끊기
         if last_level is not None and level != last_level:
             if current_chain:
                 chains.append(current_chain)
                 current_chain = []
             last_level = level
 
-        # 동사/조동사만 chain에 포함
+        # ✅ AUX, VERB 추가
         if token["pos"] in {"AUX", "VERB"}:
             current_chain.append(token)
 
@@ -727,121 +944,35 @@ def analyze_verb_chain(parsed):
 
     all_symbol_maps = {}
 
-    # ✅ 2. 각 verb chain에 대해 분석
+    # 각 chain 분석
     for chain in chains:
         if not chain:
             continue
-
-        symbol_map = {}
+        
+        #디버깅
+        print("[DEBUG] Verb Chunk:", [t["text"] for t in chain])
         first = chain[0]
         last = chain[-1]
-        aspect = []
 
-        # ✅ modal 조동사 확인
-        modal_present = {"will", "shall", "can", "may", "must"}
-        modal_past = {"would", "should", "could", "might"}
+        symbol_map, aspect, voice = set_verbchunk_attributes(chain)
 
-        is_modal_first = False
-        first_lemma = first.get("lemma", "").lower()
-
-        if first_lemma in modal_present:
-            symbol_map[first["idx"]] = "|"
-            is_modal_first = True
-            found_first_aux = True
-        elif first_lemma in modal_past:
-            symbol_map[first["idx"]] = ">"
-            is_modal_first = True
-            found_first_aux = True
-
-        # ✅ 3. 첫 modal 이후 첫 AUX를 찾아 시제 설정
-        found_first_aux = False
-        for t in chain[1:]:
-            text_lower = t.get("text", "").lower()
-            if text_lower in {"not", "n't"}:
-                continue
-            if t["pos"] == "AUX":
-                if not found_first_aux:
-                    # modal이 없으면 이 AUX가 시제 표시 대상
-                    if not is_modal_first:
-                        # 시제 판단
-                        tense = get_tense_symbol(t)
-                        if tense:
-                            symbol_map[t["idx"]] = tense
-                    found_first_aux = True
-                # 진행/완료는 다음 loop로
-                continue
-            # VERB 만나면 종료
-            if t["pos"] == "VERB":
-                break
-
-        # ✅ 4. 중간에 낀 조동사 완료/진행 결정정
-        for t in chain[1:-1]:
-            lemma = t.get("lemma", "").lower()
-            text_lower = t.get("text", "").lower()
-
-            # modal 뒤라면 완료/진행 기호 찍지 않음
-            if is_modal_first:
-                continue
-
-            if lemma == "have" or text_lower == "been":
-                symbol_map[t["idx"]] = "P"
-                if "perfect" not in aspect:
-                    aspect.append("perfect")
-            elif lemma == "be" and t.get("tag") == "VBG":
-                symbol_map[t["idx"]] = "i"
-                if "progressive" not in aspect:
-                    aspect.append("progressive")
-            elif text_lower == "being":
-                symbol_map[t["idx"]] = "i"
-                if "progressive" not in aspect:
-                    aspect.append("progressive")
-
-        # 마지막 본동사 기준 수동/진행 판단
-        if last.get("tag") == "VBN":
-            prev_texts = [t["text"].lower() for t in chain[:-1]]
-            second_last = chain[-2] if len(chain) >= 2 else None
-            if "being" in prev_texts or (second_last and second_last["lemma"] == "be"):
-                symbol_map[last["idx"]] = "^"
-                voice = "passive"
-            elif last["lemma"] == "be":
-                symbol_map[last["idx"]] = "^"
-                voice = "passive"
-            elif "have" in [t["lemma"] for t in chain]:
-                symbol_map[last["idx"]] = "P"
-                if "perfect" not in aspect:
-                    aspect.append("perfect")
-        elif last.get("tag") == "VBG" and "be" in [t["lemma"] for t in chain]:
-            symbol_map[last["idx"]] = "i"
-            if "progressive" not in aspect:
-                aspect.append("progressive")
-
+        # 저장 (디버깅용, 확장용)
         memory["verb_attribute_by_chain"].append({
-            "tense": tense,
             "aspect": aspect,
             "voice": voice,
-            "main_verb": last["text"],
+            "main_verb": chain[-1]["text"],
             "verb_chain": [t["text"] for t in chain],
             "symbol_map": symbol_map
         })
-        
-        # 전체 symbol_map 통합
+
         all_symbol_maps.update(symbol_map)
 
     memory["verb_attribute"] = {
-        "symbol_map": all_symbol_maps
-    }
-
-def get_tense_symbol(token):
-    """
-    token이 조동사일 때 현재/과거 시제 기호 반환
-    """
-    lemma = token.get("lemma", "").lower()
-    if lemma in {"will", "shall", "can", "may", "must"}:
-        return "|"
-    elif lemma in {"would", "should", "could", "might"}:
-        return ">"
-    return None
-
+        "symbol_map": all_symbol_maps,
+        "main_verb": last["text"],
+        "aspect": aspect,
+        "voice": voice
+}
 
 # ◎ GPT 프롬프트 처리 함수
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
@@ -856,7 +987,7 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
         morph = token.morph.to_dict()
         tokens.append({
             "idx": token.idx, "text": token.text, "pos": token.pos_,"tag": token.tag_,
-            "dep": token.dep_, "head": token.head.text, "head_idx": token.head.idx,
+            "dep": token.dep_.lower(), "head": token.head.text, "head_idx": token.head.idx,
             "tense": morph.get("Tense"), "aspect": morph.get("Aspect"), "voice": morph.get("Voice"), "form": morph.get("VerbForm"),
             "morph": morph, "lemma": token.lemma_, "is_stop": token.is_stop,
             "is_punct": token.is_punct, "is_alpha": token.is_alpha, "ent_type": token.ent_type_,
@@ -909,6 +1040,8 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     # ✅ 절 분기 트리거 부여 (0.5 level)
     parsed = assign_level_triggers(parsed)
 
+    parsed = assign_chunk_role2(parsed)
+
     print("\n📍 Level trigger check")
     for t in parsed:
         if "level" in t and isinstance(t["level"], float):
@@ -920,10 +1053,9 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     # ✅ 📍 level 보정: prep-pobj 레벨 통일
     parsed = repair_level_within_prepositional_phrases(parsed)
 
-    analyze_verb_chain(parsed)
+    set_allverbchunk_attributes(parsed)
 
     return parsed
-
 
 # GPT API Parsing(with 프롬프트)을 이용하기 위한 함수
 def gpt_parsing_withprompt(tokens: list) -> str:
@@ -941,7 +1073,7 @@ Token Info:
 {token_block}
 
 Return a JSON list with each token's role in the sentence.
-Each item must have: idx, text, role, and optionally combine/level.
+Each item must have: idx, text, role1, role2, and optionally combine/level.
 
 If unsure, return best-guess. Do not return explanations, just the JSON.
 """
@@ -962,7 +1094,7 @@ def apply_symbols(parsed):
 
     for item in parsed:
         idx = item.get("idx", -1)
-        role = item.get("role", "").lower()
+        role1 = str(item.get("role1", "") or "").lower()
         level = item.get("level")
 
         if idx < 0 or level is None:
@@ -974,7 +1106,7 @@ def apply_symbols(parsed):
             levels = [int(level), int(level) + 1]
 
         # 
-        symbol = role_to_symbol.get(role)
+        symbol = role_to_symbol.get(role1)
 
         for lvl in levels:
             line = symbols_by_level.setdefault(lvl, [" " for _ in range(line_length)])
@@ -1006,6 +1138,53 @@ def apply_symbols(parsed):
                 if line[i] == " ":
                     line[i] = "_"
 
+
+# 처음 나오는 조동사와 본동사 사이를 .(점)으로 연결 시켜줌, 레벨 순회하며(다른 레벨간 연결할일 없음), 기존 도형 있으면 안찍음
+def apply_aux_to_mverb_bridge_symbols_each_levels(parsed, sentence):
+
+    for modal_token in [t for t in parsed if t["pos"] == "AUX" and t["dep"] in {"aux", "auxpass"}]:
+        level = modal_token.get("level")
+        if level is None:
+            continue
+
+        line = memory["symbols_by_level"].get(level)
+        if not line:
+            continue
+
+        modal_idx = modal_token["idx"]
+
+        # ✅ 조동사 이후에 나오는 첫 번째 본동사(verb role)
+        verb_token = next(
+            (t for t in parsed
+             if t.get("role1") == "verb"
+             and t.get("level") == level
+             and t["idx"] > modal_idx),
+            None
+        )
+        if not verb_token:
+            continue
+
+        verb_idx = verb_token["idx"]
+        start, end = sorted([modal_idx, verb_idx])
+
+        # ✅ 의문문 판단
+        has_subject_between = any(
+            t.get("role1") == "subject" and start < t["idx"] < end
+            for t in parsed
+        )
+
+        if has_subject_between:
+            if line[modal_idx] == " ":
+                line[modal_idx] = "∩"
+        else:
+            if line[modal_idx] == " ":
+                line[modal_idx] = "."
+
+        for i in range(start + 1, end):
+            if line[i] == " ":
+                line[i] = "."
+
+
 # 동일레벨, 같은 절에 동사가 여러개 병렬 나열된 경우 동사덩어리 처음 요소와 끝요소를 .(점)으로 채워줌
 def draw_dot_bridge_across_verb_group(parsed):
     line_length = memory["sentence_length"]
@@ -1017,8 +1196,8 @@ def draw_dot_bridge_across_verb_group(parsed):
         if token.get("pos") not in {"AUX", "VERB"}:
             continue
 
-        dep = token.get("dep")
-        if dep not in {"ROOT", "conj", "xcomp", "ccomp"}:
+        dep = token.get("dep", "").lower()
+        if dep not in {"root", "conj", "xcomp", "ccomp"}:
             continue
 
         level = token.get("level")
@@ -1033,10 +1212,10 @@ def draw_dot_bridge_across_verb_group(parsed):
                 t["idx"] > idx1 and
                 t.get("level") == level and
                 t.get("pos") in {"VERB", "AUX"} and
-                t.get("dep") in {"ROOT", "conj", "xcomp", "ccomp"}
+                t.get("dep", "").lower() in {"root", "conj", "xcomp", "ccomp"}
             ):
                 has_subject_between = any(
-                    s.get("role") == "subject" and
+                    s.get("role1") == "subject" and
                     s.get("level") == level and
                     idx1 < s["idx"] < t["idx"]
                     for s in parsed
@@ -1136,19 +1315,20 @@ def t(sentence: str):
         morph = token.morph.to_dict()
         idx = token.idx
         text = token.text
-        role = next((t.get("role") for t in parsed if t["idx"] == idx), None)
+        role1 = next((t.get("role1") for t in parsed if t["idx"] == idx), None)
+        role2 = next((t.get("role2") for t in parsed if t["idx"] == idx), None)
         combine = next((t.get("combine") for t in parsed if t["idx"] == idx), None)
         level = next((t.get("level") for t in parsed if t["idx"] == idx), None)
 
         combine_str = (
-            "[" + ", ".join(f"{c['text']}:{c['role']}" for c in combine) + "]"
+            "[" + ", ".join(f"{c['text']}:{c['role1']}" for c in combine) + "]"
             if combine else "None"
         )
 
         child_texts = [child.text for child in token.children]
 
-        print(f"● idx({idx}), text({text}), role({role}), combine({combine_str}), level({level})")
-        print(f"  POS({token.pos_}), DEP({token.dep_}), TAG({token.tag_}), HEAD({token.head.text})")
+        print(f"● idx({idx}), text({text}), role1({role1}), role2({role2}), combine({combine_str})")
+        print(f"  level({level}), POS({token.pos_}), DEP({token.dep_}), TAG({token.tag_}), HEAD({token.head.text})")
         print(f"  lemma({token.lemma_}), is_stop({token.is_stop}), is_punct({token.is_punct}), is_title({token.is_title})")
         print(f"  morph({morph})")
         print(f"  children({child_texts})")
@@ -1156,6 +1336,7 @@ def t(sentence: str):
 
     # ✅ 도식화 및 출력
     apply_symbols(parsed)
+    apply_chunk_function_symbol(parsed)
     draw_dot_bridge_across_verb_group(parsed)
     print("🛠 Diagram:")
     print(symbols_to_diagram(sentence))
@@ -1171,6 +1352,7 @@ def t1(sentence: str):
     memory["parsed"] = parsed
     # ✅ 도식화 및 출력
     apply_symbols(parsed)
+    apply_chunk_function_symbol(parsed)
     draw_dot_bridge_across_verb_group(parsed)
     print("🛠 Diagram:")
     print(symbols_to_diagram(sentence))
@@ -1204,6 +1386,7 @@ async def analyze(request: AnalyzeRequest):            # sentence를 받아 다�
     parsed = spacy_parsing_backgpt(request.sentence)               # GPT의 파싱결과를 parsed에 저장
     memory["parsed"] = parsed
     apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
+    apply_chunk_function_symbol(parsed)
     draw_dot_bridge_across_verb_group(parsed)
     return {"sentence": request.sentence,
             "diagramming": symbols_to_diagram(request.sentence),
