@@ -530,31 +530,32 @@ def guess_combine(token, all_tokens):
     return combine if combine else None
 
 
-def NounChunk_combine_to_uplevel(parsed):
+def NounChunk_combine_apply_to_upverb(parsed):
     """
-    명사덩어리가 object / direct object / noun subject complement 역할일때
-    상위 level에 연결해주는 함수
+    명사덩어리 첫단어 role2가 object / direct object / noun subject complement일때
+    상위 동사의 comnbin에 role2를 입력해주는 함수
     """
     for token in parsed:
         role2 = token.get("role2")
+        # 명사덩어리 첫단어의 role2가 이 3개일때만 아래 소스 처리
         if role2 not in {"object", "direct object", "noun subject complement"}:
             continue
 
+        # 명사덩어리 첫단어의 head(보통 동사)의 dep가 ccomp일때만 아래 소스 처리
         head_idx = token.get("head_idx")
         head_token = next((t for t in parsed if t["idx"] == head_idx), None)
         if not head_token or head_token.get("dep") != "ccomp":
             continue
 
-        # head의 head (즉 상위 verb)
+        # 명사덩어리 첫단어의 head의 head(상위 동사 head2)가 있으면 아래 소스 처리리
         head2_idx = head_token.get("head_idx")
         head2_token = next((t for t in parsed if t["idx"] == head2_idx), None)
         if not head2_token:
             continue
-
-        # 🔥 상위 verb의 combine에 추가
         if "combine" not in head2_token or not head2_token["combine"]:
             head2_token["combine"] = []
 
+        # 🔥 상위 동사의 combine에 위 role2 3개중 1개(text, role2값, idx값) 입력
         head2_token["combine"].append({
             "text": token["text"],
             "role2": role2,
@@ -1392,7 +1393,7 @@ def t(sentence: str):
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
 
-    NounChunk_combine_to_uplevel(parsed)
+    NounChunk_combine_apply_to_upverb(parsed)
 
     # ✅ 동사덩어리 분석: 시제/상/태 출력
     verb_chain = [t for t in parsed if t["pos"] in {"AUX", "VERB"}]
@@ -1439,11 +1440,15 @@ def t(sentence: str):
 
         combine_str = (
             "[" + ", ".join(
-                f"{c['text']}:{c.get('role1') or c.get('role2') or 'None'}"
+                f"{c['text']}({c['idx']}):" + (
+                    f"{c['role1']}" if 'role1' in c else ""
+                ) + (
+                    f"/{c['role2']}" if 'role2' in c else ""
+                )
                 for c in combine
             ) + "]"
             if combine else "None"
-)
+        )
 
         child_texts = [child.text for child in token.children]
 
@@ -1470,7 +1475,7 @@ def t1(sentence: str):
     # ✅ spaCy 파싱 + 역할 분석
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
-    NounChunk_combine_to_uplevel(parsed)
+    NounChunk_combine_apply_to_upverb(parsed)
     # ✅ 도식화 및 출력
     apply_symbols(parsed)
     apply_chunk_function_symbol(parsed)
