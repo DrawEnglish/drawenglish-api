@@ -1522,11 +1522,10 @@ def t1(sentence: str):
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
     # ✅ 도식화 및 출력
-    chunk_info_list = assign_chunk_role2(parsed)
     NounChunk_combine_apply_to_upverb(parsed)
-    apply_chunk_function_symbol(parsed)
     apply_symbols(parsed)
-    apply_chunk_symbols_overwrite(chunk_info_list)
+    assign_chunk_role2(parsed)
+    apply_chunk_function_symbol(parsed)
     draw_dot_bridge_across_verb_group(parsed)
     print("🛠 Diagram:")
     print(symbols_to_diagram(sentence))
@@ -1559,17 +1558,15 @@ async def analyze(request: AnalyzeRequest):            # sentence를 받아 다�
     init_memorys(request.sentence)                     # 이 함수로 메모리 내용 채움 또는 초기화
     parsed = spacy_parsing_backgpt(request.sentence)               # GPT의 파싱결과를 parsed에 저장
     memory["parsed"] = parsed
-    chunk_info_list = assign_chunk_role2(parsed)
+    assign_chunk_role2(parsed)
     NounChunk_combine_apply_to_upverb(parsed)
-    apply_chunk_function_symbol(parsed)
     apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
-    apply_chunk_symbols_overwrite(chunk_info_list)
+    apply_chunk_function_symbol(parsed)
     draw_dot_bridge_across_verb_group(parsed)
     return {"sentence": request.sentence,
             "diagramming": symbols_to_diagram(request.sentence),
             "verb_attribute": memory.get("verb_attribute", {})
     }
-
 
 # ◎ spaCy 파싱 관련
 @app.post("/parse")
