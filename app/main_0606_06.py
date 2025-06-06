@@ -530,39 +530,6 @@ def guess_combine(token, all_tokens):
     return combine if combine else None
 
 
-def NounChunk_combine_apply_to_upverb(parsed):
-    """
-    명사덩어리 첫단어 role2가 object / direct object / noun subject complement일때
-    상위 동사의 comnbin에 role2를 입력해주는 함수
-    """
-    for token in parsed:
-        role2 = token.get("role2")
-        # 명사덩어리 첫단어의 role2가 이 3개일때만 아래 소스 처리
-        if role2 not in {"object", "direct object", "noun subject complement"}:
-            continue
-
-        # 명사덩어리 첫단어의 head(보통 동사)의 dep가 ccomp일때만 아래 소스 처리
-        head_idx = token.get("head_idx")
-        head_token = next((t for t in parsed if t["idx"] == head_idx), None)
-        if not head_token or head_token.get("dep") != "ccomp":
-            continue
-
-        # 명사덩어리 첫단어의 head의 head(상위 동사 head2)가 있으면 아래 소스 처리리
-        head2_idx = head_token.get("head_idx")
-        head2_token = next((t for t in parsed if t["idx"] == head2_idx), None)
-        if not head2_token:
-            continue
-        if "combine" not in head2_token or not head2_token["combine"]:
-            head2_token["combine"] = []
-
-        # 🔥 상위 동사의 combine에 위 role2 3개중 1개(text, role2값, idx값) 입력
-        head2_token["combine"].append({
-            "text": token["text"],
-            "role2": role2,
-            "idx": token["idx"]
-        })
-
-
 def assign_level_triggers(parsed):
     """
     절 트리거(dep in trigger_deps)가 감지되면,
@@ -625,6 +592,9 @@ def is_adverbchunk_trigger(token):
 def assign_chunk_role2(parsed):
 
     # 명사덩어리/부사덩어리 첫단어 role2에 해당값 부여 
+
+    chunk_info_list = []
+
     # 계층발생요소(level x.5단어)만 아래 소스 처리
     for token in parsed:
         level = token.get("level")
@@ -643,7 +613,7 @@ def assign_chunk_role2(parsed):
         # 계층발생요소가 is_nounchunk_trigger에 걸리면,
         if head_dep in {"ccomp", "xcomp"} and is_nounchunk_trigger(token):
 
-            # 계층발생요소의 head의 head 찾기 head값이 있으면 아래 소스 처리리
+            # 계층발생요소의 head의 head 찾기 head값이 있으면 아래 소스 처리
             head2_idx = head_token.get("head_idx")
             head2_token = next((t for t in parsed if t["idx"] == head2_idx), None)
             if not head2_token:
@@ -657,7 +627,7 @@ def assign_chunk_role2(parsed):
             if head2_lemma in beVerbs or head2_lemma in notbeLinkingVerbs_onlySVC:
                 token["role2"] = "noun subject complement"
 
-            # 2) 상위동사가 dativeVerbs일때 현level 단어의 role1에 objedct, indirect object가 있으면
+            # 2) 상위동사가 dativeVerbs일때 상위동사level 단어들의 role1에 objedct, indirect object가 있으면
             # 명사덩어리 첫단어의 role2에 'direct object'(직접목적어)값 저장
             # 아니면 role2에 'object'(목적어)값 저장
             elif head2_lemma in dativeVerbs:
@@ -676,54 +646,6 @@ def assign_chunk_role2(parsed):
             else:
                 token["role2"] = "object"
 
-            # 명사덩어리 끝단어 찾아 ] 저장하기
-            # 명사덩어리 첫단어의 head의 children inx(인덱스)들믈 모으기
-            children_tokens = [child for child in parsed if child.get("head_idx") == head_idx]
-            children_tokens.append(head_token)
-            if not children_tokens:  # childrun 값이 있으면 아래 소스 처리
-                continue
-            # chileren 모음을 idx 기준으로 왼쪽 → 오른쪽으로 단어들 정렬
-            children_tokens.sort(key=lambda x: x["idx"])
-            # children 모음 중 맨 마지막 토큰([-1]이 마지막 토큰임) 저장
-            end_token = children_tokens[-1]
-            # 마지막 토큰이 구두점(. ! ?)이면 그 앞 토큰이 마지막 토큰
-            if (
-                end_token.get("pos") == "PUNCT" and
-                end_token.get("text") in {".", "!", "?"} and
-                len(children_tokens) >= 2
-            ):
-                end_token = children_tokens[-2]
-
-            # 마지막 토큰의 idx와 text 저장
-            end_idx = end_token.get("idx")
-            end_text = end_token.get("text", "")
-
-            # 끝글자에 ] 심볼 추가
-            end_idx_adjusted = end_idx + len(end_text) - 1
-
-            # 🔥 디버깅용 print
-            print(f"[DEBUG] end_token text: {end_text}, end_idx: {end_idx}")
-            print(f"[DEBUG] end_token full info: {end_token}")
-            print(f"[DEBUG] end_token level (raw): {end_token.get('level')}")
-            print(f"[DEBUG] fallback level: {level}")
-
-            # 명사덩어리 첫단어 인덱스 계산(x.5일 경우 .5를 버림)
-            first_level = token.get("level")
-            level_num = int(first_level)
-
-            # 단어덩어리 끝에 ] 찍기위한 준비
-            # 문장길이 만큼의 공백 리스트 생성, level별 심볼 저장 공백 리스트 생성
-            line_length = memory["sentence_length"]
-            symbols_by_level = memory["symbols_by_level"]
-
-            # 단어덩어리가 있는 level_num의 symbols_by_level의 저장공간이 있으면 그 값을 가져오고,
-            # 없으면 공백으로 채워 만듦(apply_symbols() 처리 시점보다 먼저 이 부분만 미리 만들어 버리는 것임).
-            # 하지만, 현시점에서는 symbols_by_level 딕셔너리에 해당 level_num의 저장공간이 존재하지 않음
-            line = symbols_by_level.setdefault(level_num, [" " for _ in range(line_length)])
-
-            # 해당 level(line)의 끝글자 인덱스에 ] 심볼 저장
-            if 0 <= end_idx_adjusted < len(line):
-                line[end_idx_adjusted] = "]"
 
         # 주어 명사덩어리 확정 : 덩어리요소 첫단어의 head의 dep가 csubj, nsubj, nsubjpass이고,
         # is_nounchunk_trigger() 함수에 걸리면 role2에 'chunk_subject'값 입력
@@ -735,7 +657,168 @@ def assign_chunk_role2(parsed):
         if head_dep == "advcl" and is_adverbchunk_trigger(token):
             token["role2"] = "chunk_adverb_modifier"
 
-    return parsed
+        
+        # ✅ 덩어리 정보 수집 (끝 토큰 찾기 + 시작 토큰 info)
+        children_tokens = [child for child in parsed if child.get("head_idx") == head_idx]
+        children_tokens.append(head_token)
+        if not children_tokens:
+            continue
+
+        children_tokens.sort(key=lambda x: x["idx"])
+        end_token = children_tokens[-1]
+
+        # 끝 토큰이 구두점(. ! ?)이면 그 앞 토큰 사용
+        if (
+            end_token.get("pos") == "PUNCT" and
+            end_token.get("text") in {".", "!", "?"} and
+            len(children_tokens) >= 2
+        ):
+            end_token = children_tokens[-2]
+
+        end_idx = end_token.get("idx")
+        end_text = end_token.get("text", "")
+        end_idx_adjusted = end_idx + len(end_text) - 1
+
+        first_level = int(token.get("level"))
+        first_idx = token.get("idx")
+
+        # 덩어리 유형별 role2 심볼 결정
+        role2_to_symbol = {
+            "object": "□",
+            "direct object": "□",
+            "noun subject complement": "[",
+            # 🔥 앞으로 추가 가능:
+            # "adjective subject complement": "(",
+            # "chunk_subject": "[",
+            # "chunk_adverb_modifier": "<",
+        }
+
+        role2 = token.get("role2")
+        symbol = role2_to_symbol.get(role2)
+
+        if symbol:
+            chunk_info = {
+                "first_idx": first_idx,
+                "first_level": first_level,
+                "symbol": symbol,
+                "end_idx_adjusted": end_idx_adjusted,
+            }
+            chunk_info_list.append(chunk_info)
+
+    return chunk_info_list
+
+def NounChunk_combine_apply_to_upverb(parsed):
+    """
+    명사덩어리 첫단어 role2가 object / direct object / noun subject complement일때
+    상위 동사의 comnbin에 role2를 입력해주는 함수
+    """
+    for token in parsed:
+        role2 = token.get("role2")
+        # 명사덩어리 첫단어의 role2가 이 3개일때만 아래 소스 처리
+        if role2 not in {"object", "direct object", "noun subject complement"}:
+            continue
+
+        # 명사덩어리 첫단어의 head(보통 동사)의 dep가 ccomp일때만 아래 소스 처리
+        head_idx = token.get("head_idx")
+        head_token = next((t for t in parsed if t["idx"] == head_idx), None)
+        if not head_token or head_token.get("dep") != "ccomp":
+            continue
+
+        # 명사덩어리 첫단어의 head의 head(상위 동사 head2)가 있으면 아래 소스 처리리
+        head2_idx = head_token.get("head_idx")
+        head2_token = next((t for t in parsed if t["idx"] == head2_idx), None)
+        if not head2_token:
+            continue
+        if "combine" not in head2_token or not head2_token["combine"]:
+            head2_token["combine"] = []
+
+        # 🔥 상위 동사의 combine에 위 role2 3개중 1개(text, role2값, idx값) 입력
+        head2_token["combine"].append({
+            "text": token["text"],
+            "role2": role2,
+            "idx": token["idx"]
+        })
+
+
+def apply_chunk_symbols_overwrite(chunk_info_list):
+    """
+    수집된 덩어리 정보 리스트를 바탕으로
+    1) 덩어리 끝단어에 ] 심볼
+    2) 덩어리 첫단어에 role2 심볼(□, [ 등) 찍기
+    """
+    symbols_by_level = memory["symbols_by_level"]
+    line_length = memory["sentence_length"]
+
+    for chunk in chunk_info_list:
+        first_idx = chunk["first_idx"]
+        first_level = chunk["first_level"]
+        symbol = chunk["symbol"]
+        end_idx_adjusted = chunk["end_idx_adjusted"]
+
+        line = symbols_by_level.setdefault(first_level, [" " for _ in range(line_length)])
+
+        # 1) 끝단어 끝글자에 ] 심볼 찍기
+        if 0 <= end_idx_adjusted < len(line):
+            line[end_idx_adjusted] = "]"
+
+        # 2) 첫단어에 role2 심볼 찍기
+        if 0 <= first_idx < len(line):
+            line[first_idx] = symbol
+
+
+def apply_chunk_function_symbol(parsed):
+    """
+    role2=chunk_subject인 토큰을 기준으로
+    해당 절(start_idx ~ end_idx) 범위에 [ ] 심볼 부여
+    """
+    line_length = memory["sentence_length"]
+    symbols_by_level = memory["symbols_by_level"]
+
+    for token in parsed:
+        role2 = token.get("role2")
+        if not role2:
+            continue
+
+        level = token.get("level")
+        if level is None:
+            continue
+
+        line = symbols_by_level.setdefault(int(level), [" " for _ in range(line_length)])
+
+        start_idx = token["idx"]
+        head_idx = token.get("head_idx")
+        head_token = next((t for t in parsed if t["idx"] == head_idx), None)
+
+        if not head_token:
+            continue
+
+        children_tokens = [child for child in parsed if child.get("head_idx") == head_idx]
+        children_tokens.append(head_token)
+        if not children_tokens:
+            continue
+
+        children_tokens.sort(key=lambda x: x["idx"])
+
+        end_token = children_tokens[-1]
+
+        if end_token.get("pos") == "PUNCT" and len(children_tokens) >= 2:
+            end_token = children_tokens[-2]
+
+        end_idx = end_token["idx"]
+        end_idx_adjusted = end_idx + len(end_token["text"]) - 1
+
+        # ✅ role2에 따라 심볼 다르게
+        if role2 == "chunk_subject":
+            left, right = "[", "]"
+        elif role2 == "chunk_adverb_modifier":
+            left, right = "<", ">"
+        else:
+            continue
+
+        if 0 <= start_idx < line_length:
+            line[start_idx] = left
+        if 0 <= end_idx_adjusted < line_length:
+            line[end_idx_adjusted] = right
 
 
 def assign_level_ranges(parsed):
@@ -871,61 +954,6 @@ def clean_empty_symbol_lines():
 
     for level in keys_to_remove:
         del memory["symbols_by_level"][level]
-
-
-def apply_chunk_function_symbol(parsed):
-    """
-    role2=chunk_subject인 토큰을 기준으로
-    해당 절(start_idx ~ end_idx) 범위에 [ ] 심볼 부여
-    """
-    line_length = memory["sentence_length"]
-    symbols_by_level = memory["symbols_by_level"]
-
-    for token in parsed:
-        role2 = token.get("role2")
-        if not role2:
-            continue
-
-        level = token.get("level")
-        if level is None:
-            continue
-
-        line = symbols_by_level.setdefault(int(level), [" " for _ in range(line_length)])
-
-        start_idx = token["idx"]
-        head_idx = token.get("head_idx")
-        head_token = next((t for t in parsed if t["idx"] == head_idx), None)
-
-        if not head_token:
-            continue
-
-        children_tokens = [child for child in parsed if child.get("head_idx") == head_idx]
-        children_tokens.append(head_token)
-        if not children_tokens:
-            continue
-
-        children_tokens.sort(key=lambda x: x["idx"])
-
-        end_token = children_tokens[-1]
-
-        if end_token.get("pos") == "PUNCT" and len(children_tokens) >= 2:
-            end_token = children_tokens[-2]
-
-        end_idx = end_token["idx"]
-        end_idx_adjusted = end_idx + len(end_token["text"]) - 1
-
-        # ✅ role2에 따라 심볼 다르게
-        if role2 == "chunk_subject":
-            left, right = "[", "]"
-        elif role2 == "chunk_adverb_modifier":
-            left, right = "<", ">"
-        else:
-            continue
-
-        if 0 <= start_idx < line_length:
-            line[start_idx] = left
-        if 0 <= end_idx_adjusted < line_length:
-            line[end_idx_adjusted] = right
 
 
 # 동사덩어리(verb chain) 하나 받아서 시제/상/태 분석하고 symbol_map 반환하는 함수.
@@ -1185,8 +1213,6 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     # ✅ 📍 level 보정: prep-pobj 레벨 통일
     parsed = repair_level_within_prepositional_phrases(parsed)
 
-    parsed = assign_chunk_role2(parsed)
-
     set_allverbchunk_attributes(parsed)
 
     return parsed
@@ -1411,8 +1437,6 @@ def t(sentence: str):
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
 
-    NounChunk_combine_apply_to_upverb(parsed)
-
     # ✅ 동사덩어리 분석: 시제/상/태 출력
     verb_chain = [t for t in parsed if t["pos"] in {"AUX", "VERB"}]
     if verb_chain:
@@ -1478,8 +1502,11 @@ def t(sentence: str):
         print("")
 
     # ✅ 도식화 및 출력
-    apply_symbols(parsed)
+    chunk_info_list = assign_chunk_role2(parsed)
+    NounChunk_combine_apply_to_upverb(parsed)
     apply_chunk_function_symbol(parsed)
+    apply_symbols(parsed)
+    apply_chunk_symbols_overwrite(chunk_info_list)
     draw_dot_bridge_across_verb_group(parsed)
     print("🛠 Diagram:")
     print(symbols_to_diagram(sentence))
@@ -1493,10 +1520,12 @@ def t1(sentence: str):
     # ✅ spaCy 파싱 + 역할 분석
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
-    NounChunk_combine_apply_to_upverb(parsed)
     # ✅ 도식화 및 출력
-    apply_symbols(parsed)
+    chunk_info_list = assign_chunk_role2(parsed)
+    NounChunk_combine_apply_to_upverb(parsed)
     apply_chunk_function_symbol(parsed)
+    apply_symbols(parsed)
+    apply_chunk_symbols_overwrite(chunk_info_list)
     draw_dot_bridge_across_verb_group(parsed)
     print("🛠 Diagram:")
     print(symbols_to_diagram(sentence))
@@ -1529,14 +1558,17 @@ async def analyze(request: AnalyzeRequest):            # sentence를 받아 다�
     init_memorys(request.sentence)                     # 이 함수로 메모리 내용 채움 또는 초기화
     parsed = spacy_parsing_backgpt(request.sentence)               # GPT의 파싱결과를 parsed에 저장
     memory["parsed"] = parsed
+    chunk_info_list = assign_chunk_role2(parsed)
     NounChunk_combine_apply_to_upverb(parsed)
-    apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
     apply_chunk_function_symbol(parsed)
+    apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
+    apply_chunk_symbols_overwrite(chunk_info_list)
     draw_dot_bridge_across_verb_group(parsed)
     return {"sentence": request.sentence,
             "diagramming": symbols_to_diagram(request.sentence),
             "verb_attribute": memory.get("verb_attribute", {})
     }
+
 
 # ◎ spaCy 파싱 관련
 @app.post("/parse")
