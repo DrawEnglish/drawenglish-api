@@ -689,27 +689,21 @@ def repair_level_within_prepositional_phrases(parsed):
     return parsed
 
 
-def get_nounchunk_trigger_type(token):
+def is_nounchunk_trigger(token):
+
+    # 명사절 첫단어 트리거 조건 : SCONJ + mark + IN
     if (
         token.get("pos") == "SCONJ" and token.get("dep") == "mark" and token.get("tag") == "IN"
     ):
-        return "subordinate_clause_noun"  # 종속명사절
+        return True
 
+    # to 부정사
     if (
         token.get("pos") == "PART" and token.get("dep") == "aux" and token.get("tag") == "TO" and
         token.get("lemma", "").lower() == "to"
     ):
-        return "to_infinitive_noun"  # to부정사
-
-    if (
-        token.get("morph", {}).get("VerbForm") == "Ger" or
-        (
-            token.get("tag") == "VBG" and "ing" in token.get("text", "").lower()
-        )
-    ):
-        return "gerund_noun"  # 동명사
-
-    return None  # 해당사항 없으면 None
+        return True
+    return False
 
 def is_adverbchunk_trigger(token):
 
@@ -727,44 +721,34 @@ def assign_chunk_role2(parsed):
 
     chunk_info_list = []
 
-    # 계층시작요소(level x.5단어)만 아래 소스 처리
+    # 계층발생요소(level x.5단어)만 아래 소스 처리
     for token in parsed:
         level = token.get("level")
         if not (isinstance(level, float) and level % 1 == 0.5):
             continue
 
-        #계층시작요소의 헤드 값이 있으면 아래 소스 처리
+        #계층발생요소의 헤드 값이 있으면 아래 소스 처리
         head_idx = token.get("head_idx")
         head_token = next((t for t in parsed if t["idx"] == head_idx), None)
         if not head_token:
             continue
 
-        token_dep = token.get("dep")
         head_dep = head_token.get("dep")
 
-        # 명사덩어리 판단 : 계층시작요소 헤드의 dep가(ccomp, xcomp) 이고, 
-        # 계층시작요소가 is_nounchunk_trigger에 걸리면,
-        
-        trigger_type = get_nounchunk_trigger_type(token)
+        # 명사덩어리 판단 : 계층발생요소 헤드의 dep가(ccomp, xcomp) 이고, 
+        # 계층발생요소가 is_nounchunk_trigger에 걸리면,
+        if head_dep in {"ccomp", "xcomp"} and is_nounchunk_trigger(token):
 
-        if (
-            (token_dep in {"ccomp", "xcomp"} or head_dep in {"ccomp", "xcomp"})
-            and trigger_type
-        ):
-
-            if (token_dep == "xcomp" or head_dep == "xcomp") and trigger_type == "to_infitive_noun":
+            if head_dep == "xcomp":
                 token["role1"] = "to infinitive"
 
-            if (token_dep == "xcomp" or head_dep == "xcomp") and trigger_type == "gerund_noun":
-                token["role1"] = "gerund"
-
-            # 계층시작요소의 head의 head 찾기 head값이 있으면 아래 소스 처리
+            # 계층발생요소의 head의 head 찾기 head값이 있으면 아래 소스 처리
             head2_idx = head_token.get("head_idx")
             head2_token = next((t for t in parsed if t["idx"] == head2_idx), None)
             if not head2_token:
                 continue
 
-            # 계층시작요소 head의 head인 상위동사(head2) lemma값 저장
+            # 계층발생요소 head의 head인 상위동사(head2) lemma값 저장
             head2_lemma = head2_token.get("lemma", "")
 
             # 1) 명사덩어리 확정후 상위동사가 be동사와 LinkingVerbs이면 보어 확정
@@ -794,7 +778,7 @@ def assign_chunk_role2(parsed):
 
         # 주어 명사덩어리 확정 : 덩어리요소 첫단어의 head의 dep가 csubj, nsubj, nsubjpass이고,
         # is_nounchunk_trigger() 함수에 걸리면 role2에 'chunk_subject'값 입력
-        if head_dep in {"csubj", "nsubj", "nsubjpass"} and trigger_type:
+        if head_dep in {"csubj", "nsubj", "nsubjpass"} and is_nounchunk_trigger(token):
             token["role2"] = "chunk_subject"
 
         # 부사덩어리 확정 : 덩어리요소 첫단어의 head의 dep가 advcl이고,
@@ -861,7 +845,6 @@ def apply_chunk_symbols_overwrite(chunk_info_list):
     """
     symbols_by_level = memory["symbols_by_level"]
     line_length = memory["sentence_length"]
-    parsed = memory["parsed"]
 
     for chunk in chunk_info_list:
         first_idx = chunk["first_idx"]
@@ -878,58 +861,6 @@ def apply_chunk_symbols_overwrite(chunk_info_list):
         # 2) 끝단어 끝글자에 ] 심볼 찍기
         if 0 <= end_idx_adjusted < len(line):
             line[end_idx_adjusted] = "]"
-
-        # ⬇️ 추가: to infinitive이면 "to....R" 찍기
-        to_token = next((t for t in parsed if t["idx"] == first_idx), None)
-        if to_token and to_token.get("role1") == "to infinitive":
-            # to 다음에 오는 VERB 찾기
-            verb_token = next(
-                (t for t in parsed
-                 if t["idx"] > first_idx and
-                    int(t.get("level", 0)) == first_level + 1 and
-                    t.get("pos") == "VERB"),
-                None
-            )
-            if verb_token:
-                verb_idx = verb_token["idx"]
-
-                to_line = symbols_by_level.setdefault(first_level + 1, [" " for _ in range(line_length)])
-
-                # t 찍기
-                if 0 <= first_idx < len(line):
-                    to_line[first_idx] = "t"
-                # o 찍기 (to 바로 다음 글자 위치)
-                o_idx = first_idx + 1
-                if 0 <= o_idx < len(line):
-                    to_line[o_idx] = "o"
-                # t-o ~ verb 앞까지 .으로 메우기
-                for i in range(o_idx + 1, verb_idx):
-                    if 0 <= i < len(line) and line[i] == " ":
-                        to_line[i] = "."
-                # verb 자리 R 찍기
-                if 0 <= verb_idx < len(line):
-                    to_line[verb_idx] = "R"
-
-
-        # ⬇️ 추가: gerund이면 "R...ing" 찍기
-        ing_token = next((t for t in parsed if t["idx"] == first_idx), None)
-        if ing_token and ing_token.get("role1") == "gerund":
-            # to 다음에 오는 VERB 찾기
-            verb_token = next(
-                (t for t in parsed
-                 if t["idx"] > first_idx and
-                    int(t.get("level", 0)) == first_level + 1 and
-                    t.get("pos") == "VERB"),
-                None
-            )
-            if verb_token:
-                verb_idx = verb_token["idx"]
-
-                ing_line = symbols_by_level.setdefault(first_level + 1, [" " for _ in range(line_length)])
-
-                # t 찍기
-                if 0 <= first_idx < len(line):
-                    ing_line[first_idx] = "R"
 
 
 def apply_chunk_function_symbol(parsed):

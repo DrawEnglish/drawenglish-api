@@ -1,0 +1,131 @@
+친구야 나는 지금 종속접속사절이 명사역할을 하는경우
+그 종속절의 role에 목적어, 보어, 직접목적어를 결정해서 입력하고자해,
+근데 보니까, 그런 경우는 종속절의 동사가 ccomp라는 것이 3가지 공통조건이야,
+이 상황에서 
+
+1) 일단 보어로의 결정은 상위동사가 be동사(필요시 linking verb포함)류 인 경우 '보어'로 결정할 수 있을것 같고,
+
+2) 상위절에 목적어가 없다면 '목적어'로 결정,
+
+3) 상위절 동사가
+dativeVerbs = {
+    "give", "send", "offer", "show", "lend", "teach", "tell", "write", "read", "promise",
+    "sell", "pay", "pass", "bring", "buy", "ask", "award", "grant", "feed", "hand", "leave", "save", 
+    "bring", "bake", "build", "cook", "sing", "make"  # dative verb로 사용 드문 것들
+}이것들이고, 그리고
+상위절에 간접목적어 또는 목적어가 있다면 '직접목적어'로 결정
+3)의 경우에는 추가로 간접목적어의 dative, iobj태그 정보를 추가 활용할 수 있을 것 같고?
+
+1), 2), 3) 조건 구분은 현실성 있는지? 추가 조건을 붙여 줄건 없는지? 검토해 줄래?
+
+
+x.5인 토큰을 찾는다.
+
+그 토큰의 head의 dep가 ccomp이고
+그 토큰이 pos(sconj) & dep(mark) & TAG(IN)이면  # 이건 이미 있는 is_chunk_nounclause_trigger(token) 함수 이용하면 됨.
+그 덩어리는 SVO의 목적어, SVOO의 직접목적어, SVC의 보어 후보가 됨.
+
+1) 그 토큰의 헤드의 헤드의 lemma가 be 또는 미리 정의한 netbeLinkingVerbs_onlySVC이면
+보어로 결정하는데 실제적인 처리는
+그 토큰의 role1에 noun subject complement를 저장(이미 뭐가 있어도 덮어씀)
+
+2) 그 토큰의 헤드의 헤드의 lemma가 미리정의한 dativeVerbs이고
+그 토큰의 level x(0.5이면 level 0, 1.5이면 level 1) 단어들의 role1에 
+object 또는 indirect object가 있다면
+그 토큰의 role1에 direct object를 저장(이미 뭐가 있어도 덮어씀) 
+
+3) 그 토큰의 level x(0.5이면 level 0, 1.5이면 level 1) 단어들의 role1에
+object 또는 indirect object 또는 direct object가 없다면
+그 토큰의 role1에 object를 저장(이미 뭐가 있어도 덮어씀)
+
+그리고 1), 2), 3) 공통적으로 그 토큰으로 시작되는 덩어리의 끝단어의 끝글자에 ]를 저장
+
+1), 2), 3)으로 role을 정하고 나서 심볼들을 출력하면 됨.
+
+
+
+
+chunk_subject
+chunk_object
+chunk_indirect object
+chunk_direct object
+chunk_noun_subject_complement
+chunk_adjective_subject_complement
+chunk_noun_object_complement
+chunk_adjective_object_complement
+
+chunk_adverb
+
+
+
+chunk_subject
+chunk_object
+chunk_indirect_object
+chunk_direct_object
+chunk_noun_complement
+chunk_adjective_complement
+chunk_adjective_modifier
+chunk_adverb_modifier
+
+
+
+
+That she passed the exam was surprising.
+일단 이 문장은 종속접속사절이 명사 주어 역할을 하는 문장이고 이걸 도식화 하는게 목표야
+
+level_trigger_deps = [
+    "relcl", "acl", "advcl", "advmodcl", "ccomp", "xcomp", "csubj", "parataxis"
+]
+이거에 따라 passed(csubj)에서 하위레벨 발생 즉 덩어리요소가 발생한다는 걸 캐치(trigger)
+
+그 토큰의 children 중 맨앞단어가 하위레벨 발생 첫요소이고 이게 x.5값을 가질거야.
+이건 아마 assign_level_triggers 함수에서 이미 구현해 내었을 거야. 그렇지?
+
+그 x.5 단어가 pos(sconj) and dep(mark) and TAG(IN)일때 
+아까 레벨발생 trigger단어의 dep가 csubj or nsubj or nsubjpass 이면 
+x.5 단어의 role2에 chunk_subject 값을 저장하고
+
+x.5 단어의 role2값이 chunk_subject이면
+종속절 첫단어(level x.5인 단어) 첫글자에 [표시하고
+종속절 끝단어(트리거 단어 passed의 children을 이용해 끝단어 찾음) 끝글자에 ]표시하는데,
+이 표시는 level(즉, x+1에 저장하는 거 아니며, 이미 있는거는 덮어 써버림)
+
+
+
+
+
+
+
+
+
+친구야 명사절 구현했던거아 비슷하게
+
+레벨트리거 단어 arrive(advcl),
+이 단어의 children은 'when', 'I' 이건데 여기서 구두점(., !, ? 등)은 제외
+
+맨앞단어 when이 pos(sconj), dep(mark or advmod), tag(IN or WRB)일때
+arrive의 dep가 advcl이면 
+when에 chunk_adverb_modifier을 저장하고
+첫단어 첫글자에 <, 끝단어 끝글자에 > 저장
+
+
+추가로 아까 명사절 처리할때도 구두점 제외하는 것 보강
+
+
+
+
+
+
+
+
+
+She believes that he is honest.
+
+
+The problem is that he didn't call.
+
+that he didn't call: 명사절 (주격보어)
+
+
+
+

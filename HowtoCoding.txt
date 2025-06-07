@@ -1,4 +1,7 @@
-trigger_deps = ["relcl", "acl", "advcl", "ccomp", "xcomp"]
+level_trigger_deps = [
+    "relcl", "acl", "advcl", "advmodcl", "ccomp", "xcomp", "csubj", "parataxis"
+]
+
 
 
 dep
@@ -6,3 +9,24 @@ ccomp 동사의 목적어 명사절
 nsubj, nsubjpass, csubj : 주어 명사절
 attr : noun subject complement
 
+
+
+
+ enjoy reading books in my free time.
+친구야 이문장의 reading는 동명사잖아?
+캡춰한 태깅 정보 참고하고,
+reading은 계층발생 level 트리거이면서 dep(xcomp)를 가져
+현재 소스를 그대로 유지하면서 
+if head_dep in {"ccomp", "xcomp"} and is_nounchunk_trigger(token):
+이걸 if head_dep in {"ccomp", "xcomp", "root"} and is_nounchunk_trigger(token):
+지금 동명사 문장에 맞춰 root를 추가하고
+
+
+친구야... 
+level_trigger_deps = [
+    "relcl", "acl", "advcl", "advmodcl", "ccomp", "xcomp", "csubj", "parataxis"
+]
+이러한 level_trigger에 의한 단어덩어리를 뭉칠때
+접속사 또는 to시작하는 건 children정보를 통해 맨앞에 있는 단어에다가 0.5를 부여할 수있는데,
+동명사, 현재분사, 과거분사의 경우 자기 자신이 0.5를 가질 수 있거든?
+그래서 나는 
