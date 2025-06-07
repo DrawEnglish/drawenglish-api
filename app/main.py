@@ -752,7 +752,7 @@ def assign_chunk_role2(parsed):
             and trigger_type
         ):
 
-            if (token_dep == "xcomp" or head_dep == "xcomp") and trigger_type == "to_infitive_noun":
+            if (token_dep == "xcomp" or head_dep == "xcomp") and trigger_type == "to_infinitive_noun":
                 token["role1"] = "to infinitive"
 
             if (token_dep == "xcomp" or head_dep == "xcomp") and trigger_type == "gerund_noun":
