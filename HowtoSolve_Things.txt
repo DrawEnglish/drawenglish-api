@@ -1,2 +1,15 @@
-trigger_deps = ["relcl", "acl", "advcl", "ccomp", "xcomp"]
+She named her dog Max.
+    ◯_____________□
 
+They appointed her manager.
+     ◯_____________□
+
+
+This is the book that you gave me.
+     ◯______[    □_____________
+                 □        ◯    □
+
+
+  |             >
+I regret having told her the secret.
+  ◯     동명사덩어리 시제표시? 확인 필요
