@@ -36,6 +36,10 @@ t("I love you.")
 t1("She told me that She want to eat somthing.")
 
 
+cd /   ☜ C:/ 루트로 이동
+git clone https://github.com/DrawEnglish/drawenglish-api.git
+
+
 ◆ Pytho에서 사용하는 정해진 특수 속성
 __name__	이 모듈의 이름 (__main__, spacy, 등)
 __file__	이 모듈이 어디서 로딩되었는지 경로

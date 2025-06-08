@@ -13,3 +13,8 @@ This is the book that you gave me.
   |             >
 I regret having told her the secret.
   ◯     동명사덩어리 시제표시? 확인 필요
+
+
+To learn a new language takes time.
+                        ◯_____□
+   ◯
