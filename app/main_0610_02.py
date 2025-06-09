@@ -56,8 +56,7 @@ verb_attr_symbol = {
 verbals_symbol = {
     "bare infinitive": "R",
     "to infinitive": "to.R",
-    "gerund": "R.ing",
-    "present participle": "R.ing",
+    "gerund or preparticiple": "R.ing",
     "past participele": "R.ed"
 }
 
@@ -1281,14 +1280,6 @@ def init_memorys (sentence: str):
     memory["sentence_length"] = len(sentence)  # 도식 길이 추적용 (줄 길이 통일)
 
 
-def lookup_symbol(name):
-    name = name.lower()
-    for symbol_category in symbols_all.values():
-        for key, value in symbol_category.items():
-            if key.lower() == name:
-                return value
-    return None
-
 # ◎ symbols 메모리에 심볼들 저장하기
 def apply_symbols(parsed):
     symbols_by_level = memory["symbols_by_level"]
@@ -1296,31 +1287,26 @@ def apply_symbols(parsed):
 
     for item in parsed:
         idx = item.get("idx", -1)
-        role1 = item.get("role1", "") or ""
-        role2 = item.get("role2", "") or ""
+        role1 = str(item.get("role1", "") or "").lower()
         level = item.get("level")
 
         if idx < 0 or level is None:
             continue
 
-        symbol1 = lookup_symbol(role1)
-        symbol2 = lookup_symbol(role2)
+        # ✅ 0.5처럼 경계 레벨은 두 줄에 심볼 찍기
+        levels = [level]
+        if isinstance(level, float) and level % 1 == 0.5:
+            levels = [int(level), int(level) + 1]
 
-        # ✅ 1. role1: 정수 레벨에만 찍기
-        levels_role1 = [int(level)]  # <--- 여기 수정
-        for lvl in levels_role1:
+        # 
+        symbol = role_to_symbol.get(role1)
+
+        for lvl in levels:
             line = symbols_by_level.setdefault(lvl, [" " for _ in range(line_length)])
-            if 0 <= idx < len(line) and line[idx] == " " and symbol1:
-                line[idx] = symbol1
+            if 0 <= idx < len(line) and line[idx] == " " and symbol:
+                line[idx] = symbol
 
-        # ✅ 2. role2: (0.5 레벨 단어에만)
-        if isinstance(level, float) and (level % 1 == 0.5):
-            lvl_role2 = int(level) + 1
-            line2 = symbols_by_level.setdefault(lvl_role2, [" " for _ in range(line_length)])
-            if 0 <= idx < len(line2) and line2[idx] == " " and symbol2:
-                line2[idx] = symbol2
-
-    # ⬇️ combine 연결선을 _ 로 그려줌!
+    # ⬇️ 여기서 combine 연결선을 _ 로 그려줌!
     for item in parsed:
         combine = item.get("combine")
         level = item.get("level")
@@ -1330,11 +1316,12 @@ def apply_symbols(parsed):
             continue
 
         for comb in combine:
-            idx2 = comb.get("idx")
+            idx2 = comb.get("idx")  # ✅ text 비교 대신 idx 직접 사용
             if idx2 is None:
                 continue
 
-            lvl = int(level + 0.5)
+            # 같은 레벨 줄에 밑줄 채우기
+            lvl = int(level + 0.5)  # level이 float이면 int로 변환
 
             line = symbols_by_level.setdefault(lvl, [" " for _ in range(line_length)])
             start = min(idx1, idx2)
@@ -1343,8 +1330,6 @@ def apply_symbols(parsed):
             for i in range(start + 1, end):
                 if line[i] == " ":
                     line[i] = "_"
-
-    return parsed
 
 
 # 처음 나오는 조동사와 본동사 사이를 .(점)으로 연결 시켜줌, 레벨 순회하며(다른 레벨간 연결할일 없음), 기존 도형 있으면 안찍음
@@ -1544,7 +1529,7 @@ def t1(sentence: str):
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
     # ✅ 도식화 및 출력
-    chunk_info_list = assign_chunk_role(parsed)
+    chunk_info_list = assign_chunk_role2(parsed)
     NounChunk_combine_apply_to_upverb(parsed)
     apply_chunk_function_symbol(parsed)
     apply_symbols(parsed)
