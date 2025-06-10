@@ -600,6 +600,9 @@ def assign_level_trigger_ranges(parsed):
 
 ######################################## 신경을 써야할 특별예외처리 부분 ###################################
 
+    ## 특별예외 : 계층발생 ccomp의 자식이 to부정사이고, to부정사의 주체인 앞단어를 nsubj로 태깅하는데,
+    #            nsubj가 덩어리요소 시작단어임(예문 : I want you to succeed.)
+
         # ✅ 단어덩어리 맨 앞 토큰 찾기
         sorted_clause = sorted(clause_tokens, key=lambda x: x["idx"])
         first_token = sorted_clause[0]
