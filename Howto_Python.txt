@@ -35,7 +35,7 @@ t("I love you.")
 
 t("I want you to succeed.")
 
-t1("She told me that She want to eat somthing.")
+t("She told me that She want to eat somthing.")
 
 
 cd /   ☜ C:/ 루트로 이동

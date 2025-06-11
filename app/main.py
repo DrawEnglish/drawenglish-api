@@ -468,10 +468,22 @@ def guess_combine(token, all_tokens):
     idx = token.get("idx")
     combine = []
 
+    current_level = token.get("level")
+    token_idx = token.get("idx")
+    token_head_idx = token.get("head_idx")
+
+    # t의 head의 head 구하기
+    t_head_idx = t.get("head_idx")
+    t_head_token = next((x for x in all_tokens if x.get("idx") == t_head_idx), None)
+    t_head2_idx = t_head_token.get("head_idx") if t_head_token else None
+
+
     # ✅ Verb → object / complement (SVO, SVC)
     if role1 == "verb":
         for t in all_tokens:
             if (
+                if t_head_idx == token_head_idx or t_head2_idx == token_head_idx:
+
                 t.get("head_idx") == idx
                 and t["idx"] > idx  # 🔧 오른쪽 방향 연결만 허용
             ):
@@ -479,6 +491,7 @@ def guess_combine(token, all_tokens):
                 if r in [
                     "object",
                     "indirect object",
+                    "direct object"
                     "noun subject complement",
                     "adjective subject complement",
                     "noun object complement",
@@ -495,15 +508,24 @@ def guess_combine(token, all_tokens):
                             ):
                                 combine.append({"text": c["text"], "role1": c["role1"], "idx": c["idx"]})
 
-    # ✅ Indirect object → direct object (SVOO 구조)
-    if role1 == "indirect object":
+    # ✅ Indirect object / object → direct object (SVOO 구조)
+    if role1 in ("indirect object", "object"):
+
         for t in all_tokens:
+            t_level = t.get("level")
+            print(t_level)
+            print(t["text"])
             if (
-                t.get("role1") in ["direct object"] and
-                t.get("head_idx") == token.get("head_idx")
-                and t["idx"] > token["idx"]  # 🔧 오른쪽 방향만 연결
+                t.get("role1") == "direct object" and
+                t.get("idx") > token_idx and
+                int(t_level) == current_level
             ):
-                combine.append({"text": t["text"], "role1": "direct object", "idx": t["idx"]})
+
+                if t_head_idx == token_head_idx or t_head2_idx == token_head_idx:
+                    combine.append({
+                        "text": t["text"], "role1": "direct object", "idx": t["idx"]
+                    })
+
 
     # ✅ Object → object complement (SVOC 구조)
     if role1 == "object":
@@ -1212,6 +1234,9 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
     parsed = recover_direct_object_from_indirect(parsed)
 
 
+    # level 분기 전파
+    parsed = assign_level_trigger_ranges(parsed)
+
     # ✅ 요기! 모든 보정 끝난 후에 combine 추론
     for t in parsed:
         combine = guess_combine(t, parsed)
@@ -1238,9 +1263,6 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
             print("[ERROR] GPT parsing failed:", e)
             print("[RAW CONTENT]", content if 'content' in locals() else '[No response]')
             return []
-
-    # level 분기 전파
-    parsed = assign_level_trigger_ranges(parsed)
 
     assign_chunk_roles(parsed)   # ★★★★ 위의 assign_level_trigger_ranges() 함수 위로 갈 수 없다.
                                  # 그래서 guess_combine_second()를 한번 더 호출한다.
