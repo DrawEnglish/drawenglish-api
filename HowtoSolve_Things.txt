@@ -18,3 +18,67 @@ I regret having told her the secret.
 To learn a new language takes time.
                         ◯_____□
    ◯
+
+
+Watching movies affects my sleep.
+◯               ◯__________□
+◯ 동명사 뒤 목적어를 인식 못함
+
+
+
+
+
+■■■ 결합요소와 Head 관계 : 현토큰은 동사, 단어(head)
+
+He is a man. : is(is), man(is)
+☞ t토큰의헤드 = 현토큰
+
+He is smart. : is(is), smart(is)
+☞ t토큰의헤드 = 현토큰
+
+I love you. : love(love), you(love)
+☞ t토큰의헤드 = 현토큰
+
+
+I gave you bananas. : gave(gave), you(gave), bananas(gave).
+☞ t토큰의헤드 = 현토큰
+
+
+They consider him a hero. : consider(consider), him(hero), hero(consider)
+☞ him : t토큰의헤드(hero)의 헤드(consider) = 현토큰 
+☞ hero : t토큰의헤드 = 현토큰
+
+
+They consider him smart. : consider(consider), him(smart), hero(consider)
+☞ him : t토큰의헤드(smart)의 헤드(consider) = 현토큰 
+☞ smart : t토큰의헤드 = 현토큰
+
+
+I want to eat something. : want(want), to(eat), eat(want), something(eat)
+☞ to : t토큰의헤드(eat)의 헤드(want) = 현토큰 
+
+
+She told me that she ate something. : told(told), me(told), that(ate), she(ate), ate(told), someghing(ate)
+☞ me : t토큰의헤드(told) = 현토큰
+☞ that : t토큰의헤드(ate)의 헤드(told)
+
+
+I want you to succeed. want(want), you(succeed), to(succeed), succeed(want)
+☞ you : t토큰의헤드(succeed)의 헤드(want) = 현토큰
+☞ to : t토큰의헤드(succeed)의 헤드(want) = 현토큰
+
+
+
+■■■ 단어덩어리 명사주어 판단
+
+That she passed the exam was surprising.
+☞ That : 현토큰의 헤드(passed)의 dep = nsubj
+
+To study Englihs is important.
+☞ To : 현토큰의 헤드(study)의 dep = csubj
+
+Watching movies affects my sleep.
+☞ Watching : 현토큰의 dep = csubj
+☞ 
+
+

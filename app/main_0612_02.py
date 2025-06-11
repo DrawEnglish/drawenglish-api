@@ -791,8 +791,6 @@ def is_adverbchunk_trigger(token):
 
 def assign_chunk_roles(parsed):
 
-    chunk_info_list = []
-
     # 계층시작요소(level x.5단어)가 아니면 루프 빠져 나감
     for token in parsed:
         level = token.get("level")
@@ -868,55 +866,18 @@ def assign_chunk_roles(parsed):
                 token["role1"] = "object"
 
 
-        # 주어 명사덩어리 확정 : 덩어리요소 첫단어의 head의 dep가 csubj, nsubj, nsubjpass이고,
-        # is_nounchunk_trigger() 함수에 걸리면 role3에 'chunk_subject'값 입력
         if (nounchunk_trigger_type and (token_dep in is_subject_deps) or (head_dep in is_subject_deps)):
             print(f"[DEBUG-chunk_subject] {nounchunk_trigger_type}")
             token["role3"] = "chunk_subject"
 
-        # 부사덩어리 확정 : 덩어리요소 첫단어의 head의 dep가 advcl이고,
-        # is_adverbchunk_trigger() 함수에 걸리면 role3에 'chunk_adverb_modifier'값 입력
-        if (token_dep == "advcl" or head_dep == "advcl") and is_adverbchunk_trigger(token):
-            token["role3"] = "chunk_adverb_modifier"
 
 
-        # ✅ 덩어리 정보 수집 (끝 토큰 찾기 + 시작 토큰 info)
-        children_tokens = [child for child in parsed if child.get("head_idx") == head_idx]
-        children_tokens.append(head_token)
-        if not children_tokens:
-            continue
-
-        children_tokens.sort(key=lambda x: x["idx"])
-        end_token = children_tokens[-1]
-
-        # 끝 토큰이 구두점(. ! ?)이면 그 앞 토큰 사용
-        if (
-            end_token.get("pos") == "PUNCT" and
-            end_token.get("text") in {".", "!", "?"} and
-            len(children_tokens) >= 2
-        ):
-            end_token = children_tokens[-2]
-
-        end_idx = end_token.get("idx")
-        end_text = end_token.get("text", "")
-        end_idx_adjusted = end_idx + len(end_text) - 1
-
-        first_level = int(token.get("level"))
-        first_idx = token.get("idx")
-
-        if symbol:
-            chunk_info = {
-                "first_idx": first_idx,
-                "first_level": first_level,
-                "end_idx_adjusted": end_idx_adjusted,
-            }
-            chunk_info_list.append(chunk_info)
-
-    return chunk_info_list
-
-
-def apply_chunk_verbal_and_endpoint_symbol(chunk_info_list):
-
+def apply_chunk_symbols_overwrite(chunk_info_list):
+    """
+    수집된 덩어리 정보 리스트를 바탕으로
+    1) 덩어리 끝단어에 ] 심볼
+    2) 덩어리 첫단어에 role2 심볼(□, [ 등) 찍기
+    """
     symbols_by_level = memory["symbols_by_level"]
     line_length = memory["sentence_length"]
     parsed = memory["parsed"]
@@ -924,17 +885,22 @@ def apply_chunk_verbal_and_endpoint_symbol(chunk_info_list):
     for chunk in chunk_info_list:
         first_idx = chunk["first_idx"]
         first_level = chunk["first_level"]
+        symbol = chunk["symbol"]
         end_idx_adjusted = chunk["end_idx_adjusted"]
 
         line = symbols_by_level.setdefault(first_level, [" " for _ in range(line_length)])
 
-        # 끝단어 끝글자에 ] 심볼 찍기
+        # 1) 첫단어에 role2 심볼 찍기
+        if 0 <= first_idx < len(line):
+            line[first_idx] = symbol
+
+        # 2) 끝단어 끝글자에 ] 심볼 찍기
         if 0 <= end_idx_adjusted < len(line):
             line[end_idx_adjusted] = "]"
 
         # ⬇️ 추가: to infinitive이면 "to....R" 찍기
         to_token = next((t for t in parsed if t["idx"] == first_idx), None)
-        if to_token and to_token.get("role2") == "to infinitive":
+        if to_token and to_token.get("role1") == "to infinitive":
             # to 다음에 오는 VERB 찾기
             verb_token = next(
                 (t for t in parsed
@@ -1031,9 +997,8 @@ def apply_subject_adverb_chunk_range_symbol(parsed):
                         end_token = children_tokens[i - 1]
                     break
 
-        # 동명사덩어리가 주어인 경우 덩어리 끝이 마침표 나올일 없음(이 소스는 필요없어 보임)
-        # if end_token.get("pos") == "PUNCT" and len(children_tokens) >= 2:
-        #    end_token = children_tokens[children_tokens.index(end_token) - 1]
+        if end_token.get("pos") == "PUNCT" and len(children_tokens) >= 2:
+            end_token = children_tokens[children_tokens.index(end_token) - 1]
 
         end_idx = end_token["idx"]
         end_idx_adjusted = end_idx + len(end_token["text"]) - 1
