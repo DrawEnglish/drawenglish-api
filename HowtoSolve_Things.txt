@@ -25,6 +25,33 @@ Watching movies affects my sleep.
 ◯ 동명사 뒤 목적어를 인식 못함
 
 
+I want you to succeed.
+  ◯____□___□        ]
+              ◯ 
+to succeed를 목적보어로 인식못함
+
+We caught him stealing the money.
+   ◯______□   ◯
+              ◯____________□
+stealing the money를 동명사로 시작하는 목적보어로 인시못함
+
+They elected him what they thought was best.
+     ◯_______□
+
+                           ◯_______◯___(
+
+I enjoy reading books, and she enjoy writing books.
+  ◯_____□              ◇       ◯___]_
+        R_______□                    □     ]
+                                     R_______□
+
+I enjoy reading books and reading novels.
+  ◯____□.....].......◇...        □
+        R_______□
+
+
+
+
 
 
 
@@ -69,7 +96,7 @@ I want you to succeed. want(want), you(succeed), to(succeed), succeed(want)
 
 
 
-■■■ 단어덩어리 명사주어 판단
+■■■ 단어덩어리 명사주어 판단 : 현토큰은 단어덩어리 맨앞(.5) 단어
 
 That she passed the exam was surprising.
 ☞ That : 현토큰의 헤드(passed)의 dep = nsubj
@@ -80,5 +107,11 @@ To study Englihs is important.
 Watching movies affects my sleep.
 ☞ Watching : 현토큰의 dep = csubj
 ☞ 
+
+
+
+■■■ 단어덩어리에서 모든 자식을 갖는 단어 판단 : 현토큰은 단어덩어리 맨앞(.5) 단어
+I told that I was happy.
+☞ that : 현토큰(that)의 헤드(was)
 
 

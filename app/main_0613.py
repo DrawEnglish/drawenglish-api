@@ -568,11 +568,9 @@ def guess_combine(token, all_tokens):
         for t in all_tokens:
             t_level = t.get("level")
             if (
-                t.get("role1") == "prepositional object" and t.get("head_idx") == token_idx
+                t.get("head_idx") == token_idx and t.get("role1") == "prepositional object"
                 and int(t_level) == token_current_level
-
             ):
-                print(f"[DEBUG] prepositional object t.level={t.get('level')}, token.level={token_current_level}")
                 combine.append({"text": t["text"], "role1": "prepositional object", "idx": t["idx"]})
 
         # 2️⃣ 예외 보정: head가 due/according인데, 이 token이 그 뒤의 "to"일 경우
@@ -744,14 +742,17 @@ def repair_level_within_prepositional_phrases(parsed):
         for pobj in pobj_candidates:
             pobj_level = pobj.get("level")
 
-            # ✅ 문제: pobj_level이 None이거나 다를 경우 보정
-        if pobj_level != prep_level:
+            if pobj_level == prep_level:
+                continue  # 이미 동일하면 건너뜀
+
+            # ✅ prep ~ pobj 사이 범위를 찾아 level 보정
             start = min(prep_idx, pobj["idx"])
             end = max(prep_idx, pobj["idx"])
 
             for t in parsed:
                 if start <= t["idx"] <= end:
                     t["level"] = prep_level
+                    t["level_corrected_from_prep"] = True  # 디버깅용 표시
 
     return parsed
 

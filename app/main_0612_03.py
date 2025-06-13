@@ -53,13 +53,13 @@ verb_attr_symbol = {
     "subjunctive mood": "》"
 }
 
-#verbals_symbol = {
-#    "bare infinitive": "R",
-#    "to infinitive": "to.R",
-#    "gerund": "R.ing",
-#    "present participle": "R.ing",
-#    "past participele": "R.ed"
-#}
+verbals_symbol = {
+    "bare infinitive": "R",
+    "to infinitive": "to.R",
+    "gerund": "R.ing",
+    "present participle": "R.ing",
+    "past participele": "R.ed"
+}
 
 relative_words_symbol = {
     "relative pronoun": "[X]",
@@ -77,7 +77,7 @@ relative_words_symbol = {
 symbols_all = {
     "role": role_to_symbol,
     "verb_attr": verb_attr_symbol,
-#    "verbals": verbals_symbol,
+    "verbals": verbals_symbol,
     "relatives": relative_words_symbol
 }
 
@@ -568,11 +568,9 @@ def guess_combine(token, all_tokens):
         for t in all_tokens:
             t_level = t.get("level")
             if (
-                t.get("role1") == "prepositional object" and t.get("head_idx") == token_idx
+                t.get("head_idx") == token_idx and t.get("role1") == "prepositional object"
                 and int(t_level) == token_current_level
-
             ):
-                print(f"[DEBUG] prepositional object t.level={t.get('level')}, token.level={token_current_level}")
                 combine.append({"text": t["text"], "role1": "prepositional object", "idx": t["idx"]})
 
         # 2️⃣ 예외 보정: head가 due/according인데, 이 token이 그 뒤의 "to"일 경우
@@ -744,14 +742,17 @@ def repair_level_within_prepositional_phrases(parsed):
         for pobj in pobj_candidates:
             pobj_level = pobj.get("level")
 
-            # ✅ 문제: pobj_level이 None이거나 다를 경우 보정
-        if pobj_level != prep_level:
+            if pobj_level == prep_level:
+                continue  # 이미 동일하면 건너뜀
+
+            # ✅ prep ~ pobj 사이 범위를 찾아 level 보정
             start = min(prep_idx, pobj["idx"])
             end = max(prep_idx, pobj["idx"])
 
             for t in parsed:
                 if start <= t["idx"] <= end:
                     t["level"] = prep_level
+                    t["level_corrected_from_prep"] = True  # 디버깅용 표시
 
     return parsed
 
@@ -788,10 +789,9 @@ def is_adverbchunk_trigger(token):
         return True
     return False
 
-def assign_chunk_roles_and_drawsymbols(parsed):
+def assign_chunk_roles(parsed):
 
-    line_length = memory["sentence_length"]
-    symbols_by_level = memory["symbols_by_level"]
+    chunk_info_list = []
 
     # 계층시작요소(level x.5단어)가 아니면 루프 빠져 나감
     for token in parsed:
@@ -812,7 +812,7 @@ def assign_chunk_roles_and_drawsymbols(parsed):
         # 계층시작요소가 is_nounchunk_trigger에 걸리면,
         
         nounchunk_trigger_type = get_nounchunk_trigger_type(token)
-        print(f"[DEBUG-nounchunk_trigger_type 01 in assign_chunk_roles_and_drawsymbols {nounchunk_trigger_type}")
+        print(f"[DEBUG-chunk_subject22222222] {nounchunk_trigger_type}")
 
 
         if (
@@ -821,6 +821,7 @@ def assign_chunk_roles_and_drawsymbols(parsed):
         ):
 
             if nounchunk_trigger_type == "to_infinitive_noun":  
+                print("DEBUG kdkjafkdljfl;")
                 token["role2"] = "to infinitive"
 
             if (
@@ -831,11 +832,11 @@ def assign_chunk_roles_and_drawsymbols(parsed):
 
             # 계층시작요소의 유효한 head 찾아서 head값이 없으면 루프 빠져나감
             # to부정사(to infinitive)인 경우만 head의 head로 타고 올라가기
-            head2_token = (
-                next((t for t in parsed if t["idx"] == head_token.get("head_idx")), None)
-                if nounchunk_trigger_type in {"to_infinitive_noun", "subordinate_clause_noun"}
-                else head_token
-            )
+            if nounchunk_trigger_type in {"to_infinitive_noun", "subordinate_clause_noun"}:
+                head2_idx = head_token.get("head_idx")
+                head2_token = next((t for t in parsed if t["idx"] == head2_idx), None)
+            else:
+                head2_token = head_token
             if not head2_token:
                 continue
 
@@ -851,7 +852,7 @@ def assign_chunk_roles_and_drawsymbols(parsed):
             # 명사덩어리 첫단어의 role1에 'direct object'(직접목적어)값 저장
             # 아니면 role1에 'object'(목적어)값 저장
             elif head2_lemma in dativeVerbs:
-                current_level = int(level)  # x.5 -> x
+                current_level = int(token.get("level", 0))  # 0.5 -> 0
                 # 현재 레벨의 토큰들
                 level_tokens = [t for t in parsed if int(t.get("level", -1)) == current_level]
                 has_obj_or_iobj = any(
@@ -870,7 +871,7 @@ def assign_chunk_roles_and_drawsymbols(parsed):
         # 주어 명사덩어리 확정 : 덩어리요소 첫단어의 head의 dep가 csubj, nsubj, nsubjpass이고,
         # is_nounchunk_trigger() 함수에 걸리면 role3에 'chunk_subject'값 입력
         if (nounchunk_trigger_type and (token_dep in is_subject_deps) or (head_dep in is_subject_deps)):
-            print(f"[DEBUG-nounchunk_trigger_type 02 in assign_chunk_roles_and_drawsymbols] {nounchunk_trigger_type}")
+            print(f"[DEBUG-chunk_subject] {nounchunk_trigger_type}")
             token["role3"] = "chunk_subject"
 
         # 부사덩어리 확정 : 덩어리요소 첫단어의 head의 dep가 advcl이고,
@@ -878,77 +879,78 @@ def assign_chunk_roles_and_drawsymbols(parsed):
         if (token_dep == "advcl" or head_dep == "advcl") and is_adverbchunk_trigger(token):
             token["role3"] = "chunk_adverb_modifier"
 
+    return chunk_info_list
 
-        # ✅ # 현토큰의 head의 children들 모음 (끝 토큰 찾기 + 시작 토큰 info)
-        children_tokens = [child for child in parsed if child.get("head_idx") == head_idx]
-        children_tokens.append(head_token)              # 현토큰의 head token까지 병합
-        children_tokens.sort(key=lambda x: x["idx"])    # 단어들의 순서를 왼쪽부터 정렬함
-        end_token = children_tokens[-1]
 
-        # 끝 토큰이 구두점(. ! ?)이면 그 앞 토큰 사용
-        if (
-            end_token.get("pos") == "PUNCT" and
-            end_token.get("text") in {".", "!", "?"} and
-            len(children_tokens) >= 2
-        ):
-            end_token = children_tokens[-2]
+def apply_chunk_verbal_and_endpoint_symbol(chunk_info_list):
 
-        start_idx = token["idx"]
-        end_idx = end_token["idx"]
-        end_idx_adjusted = end_idx + len(end_token.get("text", "")) - 1 # 끝단어 끝글자 인덱스 계산
-        int_level = int(level) # .5요소이지만 덩어리 끝표시를 상위계층에 맞추어 그려야 하므로 소수점(.5)버림
+    symbols_by_level = memory["symbols_by_level"]
+    line_length = memory["sentence_length"]
+    parsed = memory["parsed"]
 
-        role1 = token.get("role1")
-        line = symbols_by_level.setdefault(int_level, [" " for _ in range(line_length)])
+    for chunk in chunk_info_list:
+        first_idx = chunk["first_idx"]
+        first_level = chunk["first_level"]
+        end_idx_adjusted = chunk["end_idx_adjusted"]
 
-        # ✅ 기본 심볼
-        if role1 in {"noun subject complement", "object", "indirect object", "direct object",
-                     "noun object complement"}:
-            left, right = "□", "]"
-        else:
-            continue
+        line = symbols_by_level.setdefault(first_level, [" " for _ in range(line_length)])
 
-#        if 0 <= start_idx < line_length:
-#            line[start_idx] = left
-        if 0 <= end_idx_adjusted < line_length:
-            line[end_idx_adjusted] = right
+        # 끝단어 끝글자에 ] 심볼 찍기
+        if 0 <= end_idx_adjusted < len(line):
+            line[end_idx_adjusted] = "]"
 
-        # ✅ to infinitive → to.o...R
-        if token.get("role2") == "to infinitive":
+        # ⬇️ 추가: to infinitive이면 "to....R" 찍기
+        to_token = next((t for t in parsed if t["idx"] == first_idx), None)
+        if to_token and to_token.get("role2") == "to infinitive":
+            # to 다음에 오는 VERB 찾기
             verb_token = next(
                 (t for t in parsed
-                 if t["idx"] > start_idx and
-                    int(t.get("level", 0)) == int_level + 1 and
+                 if t["idx"] > first_idx and
+                    int(t.get("level", 0)) == first_level + 1 and
                     t.get("pos") == "VERB"),
                 None
             )
             if verb_token:
                 verb_idx = verb_token["idx"]
-                line2 = symbols_by_level.setdefault(int_level + 1, [" " for _ in range(line_length)])
-                if 0 <= start_idx < line_length: line2[start_idx] = "t"
-                if 0 <= start_idx + 1 < line_length: line2[start_idx + 1] = "o"
-                for i in range(start_idx + 2, verb_idx):
-                    if 0 <= i < line_length and line2[i] == " ":
-                        line2[i] = "."
-                if 0 <= verb_idx < line_length: line2[verb_idx] = "R"
 
-        # ✅ gerund → R...ing
-        if token.get("role2") == "gerund":
+                to_line = symbols_by_level.setdefault(first_level + 1, [" " for _ in range(line_length)])
+
+                # t 찍기
+                if 0 <= first_idx < len(line):
+                    to_line[first_idx] = "t"
+                # o 찍기 (to 바로 다음 글자 위치)
+                o_idx = first_idx + 1
+                if 0 <= o_idx < len(line):
+                    to_line[o_idx] = "o"
+                # t-o ~ verb 앞까지 .으로 메우기
+                for i in range(o_idx + 1, verb_idx):
+                    if 0 <= i < len(line) and line[i] == " ":
+                        to_line[i] = "."
+                # verb 자리 R 찍기
+                if 0 <= verb_idx < len(line):
+                    to_line[verb_idx] = "R"
+
+
+        # ⬇️ 추가: gerund이면 "R...ing" 찍기
+        ing_token = next((t for t in parsed if t["idx"] == first_idx), None)
+        if ing_token and ing_token.get("role1") == "gerund":
+            # to 다음에 오는 VERB 찾기
             verb_token = next(
                 (t for t in parsed
-                 if t["idx"] >= start_idx
-                    and (t.get("level") == level or int(t.get("level", 0)) == int_level + 1)
-                    and t.get("pos") == "VERB"),
+                 if t["idx"] > first_idx and
+                    int(t.get("level", 0)) == first_level + 1 and
+                    t.get("pos") == "VERB"),
                 None
             )
             if verb_token:
                 verb_idx = verb_token["idx"]
-                line2 = symbols_by_level.setdefault(int_level + 1, [" " for _ in range(line_length)])
-                if 0 <= start_idx < line_length:
-                    line2[start_idx] = "R"
 
-    return parsed
-    
+                ing_line = symbols_by_level.setdefault(first_level + 1, [" " for _ in range(line_length)])
+
+                # t 찍기
+                if 0 <= first_idx < len(line):
+                    ing_line[first_idx] = "R"
+
 
 def apply_subject_adverb_chunk_range_symbol(parsed):
     """
@@ -1307,8 +1309,8 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
             print("[RAW CONTENT]", content if 'content' in locals() else '[No response]')
             return []
 
-    assign_chunk_roles_and_drawsymbols(parsed)  # ★★★★ 위의 assign_level_trigger_ranges() 함수 위로 갈 수 없다.
-                                                # 그래서 guess_combine_second()를 한번 더 호출한다.
+    assign_chunk_roles(parsed)   # ★★★★ 위의 assign_level_trigger_ranges() 함수 위로 갈 수 없다.
+                                 # 그래서 guess_combine_second()를 한번 더 호출한다.
     parsed = guess_combine_second(parsed)
 
     # ✅ 📍 level 보정: prep-pobj 레벨 통일
@@ -1558,9 +1560,11 @@ def t(sentence: str):
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
 
+   # chunk_info_list = assign_chunk_role2(parsed)
    # NounChunk_combine_apply_to_upverb(parsed)
     apply_symbols(parsed)
     apply_subject_adverb_chunk_range_symbol(parsed)
+   # apply_chunk_symbols_overwrite(chunk_info_list)
     draw_dot_bridge_across_verb_group(parsed)
 
     # ✅ morph 상세 출력
