@@ -570,7 +570,6 @@ def guess_combine(token, all_tokens):
             if (
                 t.get("role1") == "prepositional object" and t.get("head_idx") == token_idx
                 and int(t_level) == token_current_level
-
             ):
                 print(f"[DEBUG] prepositional object t.level={t.get('level')}, token.level={token_current_level}")
                 combine.append({"text": t["text"], "role1": "prepositional object", "idx": t["idx"]})
@@ -723,6 +722,7 @@ def repair_level_within_prepositional_phrases(parsed):
     """
     전치사(prep 또는 agent)의 목적어(pobj) 레벨이 다를 경우
     전치사의 level 기준으로 범위 내 토큰들을 보정.
+    예문) She is certain that he will arrive on time.
     """
 
     for prep in parsed:
@@ -744,8 +744,10 @@ def repair_level_within_prepositional_phrases(parsed):
         for pobj in pobj_candidates:
             pobj_level = pobj.get("level")
 
-            # ✅ 문제: pobj_level이 None이거나 다를 경우 보정
-        if pobj_level != prep_level:
+            if pobj_level == prep_level:
+                continue  # 이미 동일하면 건너뜀
+
+            # ✅ prep ~ pobj 사이 범위를 찾아 level 보정
             start = min(prep_idx, pobj["idx"])
             end = max(prep_idx, pobj["idx"])
 
@@ -1309,10 +1311,11 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
 
     assign_chunk_roles_and_drawsymbols(parsed)  # ★★★★ 위의 assign_level_trigger_ranges() 함수 위로 갈 수 없다.
                                                 # 그래서 guess_combine_second()를 한번 더 호출한다.
-    parsed = guess_combine_second(parsed)
 
     # ✅ 📍 level 보정: prep-pobj 레벨 통일
     parsed = repair_level_within_prepositional_phrases(parsed)
+
+    parsed = guess_combine_second(parsed)
 
     set_allverbchunk_attributes(parsed)
 
