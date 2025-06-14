@@ -760,95 +760,7 @@ def repair_level_within_prepositional_phrases(parsed):
     return parsed
 
 
-def is_subordinate_clause(token, all_tokens):
-    if token.get("pos") != "VERB":
-        return False
-    if token.get("dep") not in {"ccomp", "xcomp", "advcl", "csubj"}:
-        return False
-
-    children = [t for t in all_tokens if t.get("head_idx") == token["idx"]]
-
-    # 종속접속사 역할의 SCONJ 찾기
-    has_sconj_marker = any(
-        c.get("dep") == "mark" and c.get("pos") == "SCONJ" and
-        c.get("text", "").lower() in {
-            "that", "if", "whether", "because", "although", "since", "when", "unless", "though", "as"
-        }
-        for c in children
-    )
-
-    return has_sconj_marker
-
-def is_to_infinitive(token, all_tokens):
-    if not (
-        token.get("pos") == "PART" and
-        token.get("tag") == "TO" and
-        token.get("text", "").lower() == "to"
-    ):
-        return False
-
-    # to 다음에 원형 동사(VB)가 바로 나오는지 확인
-    to_idx = token["idx"]
-    verb_after = next(
-        (t for t in all_tokens if t["idx"] > to_idx and t.get("pos") == "VERB" and t.get("tag") == "VB"),
-        None
-    )
-
-    return verb_after is not None
-
-def is_gerund(token):
-    # 핵심 조건
-    if token.get("morph", {}).get("VerbForm") == "Ger":
-        return True
-
-    # 보조 조건 조합 (극히 일부 예외 상황 보완용)
-    if (
-        token.get("tag") == "VBG" and
-        token.get("pos") == "VERB" and
-        token.get("text", "").lower().endswith("ing")
-    ):
-        # 명사 역할 dep인 경우 (보완용)
-        if token.get("dep") in {"nsubj", "dobj", "obj", "pobj", "attr"}:
-            return True
-
-    return False
-
-def is_present_participle(token):
-    # 1️⃣ VBG인데 morph에 Gerund 표시가 없는 경우
-    if token.get("tag") != "VBG":
-        return False
-
-    verb_form = token.get("morph", {}).get("VerbForm")
-    if verb_form == "Ger":
-        return False  # 동명사는 제외
-
-    # 2️⃣ pos가 VERB이고, 현재분사로 쓰이는 dep 패턴
-    if token.get("pos") == "VERB" and token.get("dep") in {
-        "amod", "acl", "advcl", "xcomp", "ccomp", "conj"
-    }:
-        return True
-
-    return False
-
-def is_past_participle(token):
-    if token.get("tag") != "VBN":
-        return False  # 핵심 태그 아님
-
-    if token.get("pos") != "VERB":
-        return False  # 동사 아니면 제외
-
-    verb_form = token.get("morph", {}).get("VerbForm")
-    if verb_form and verb_form != "Part":
-        return False  # 명시적 Gerund 등은 제외
-
-    # dep는 보조 조건이므로 생략 가능, 필요한 경우 아래처럼 추가:
-    # if token.get("dep") not in {...}:
-    #     return False
-
-    return True
-
-
-def get_nounchunk_type(token):
+def get_nounchunk_trigger_type(token):
     if (
         token.get("pos") == "SCONJ" and token.get("dep") == "mark" and token.get("tag") == "IN"
     ):
@@ -870,7 +782,7 @@ def get_nounchunk_type(token):
 
     return None  # 해당사항 없으면 None
 
-def is_adverbchunk_type(token):
+def is_adverbchunk_trigger(token):
 
     # 부사절 첫단어 트리거 조건 : SCONJ + mark/advmod + IN/WRB
     if (
@@ -885,6 +797,7 @@ def assign_chunk_roles_and_drawsymbols(parsed):
     all_subject_complements = {
         "noun subject_complement", "adjective subject_complement"
     }
+
 
     line_length = memory["sentence_length"]
     symbols_by_level = memory["symbols_by_level"]
@@ -905,13 +818,13 @@ def assign_chunk_roles_and_drawsymbols(parsed):
         head_dep = head_token.get("dep")
 
         # 부사덩어리 먼저 확정 : 덩어리요소 첫단어의 head의 dep가 advcl이고,
-        # is_adverbchunk_type() 함수에 걸리면 role3에 'chunk_adverb_modifier'값 입력
+        # is_adverbchunk_trigger() 함수에 걸리면 role3에 'chunk_adverb_modifier'값 입력
 
-        if (token_dep == "advcl" or head_dep == "advcl") and is_adverbchunk_type(token):
+        if (token_dep == "advcl" or head_dep == "advcl") and is_adverbchunk_trigger(token):
             token["role3"] = "chunk_adverb_modifier"
             continue  # ✅ 부사절이면 명사절 분기로 건너뜀
 
-        nounchunk_trigger_type = get_nounchunk_type(token)
+        nounchunk_trigger_type = get_nounchunk_trigger_type(token)
 
         # 주어 명사덩어리 그다음 확정 : 덩어리요소 첫단어의 head의 dep가 csubj, nsubj, nsubjpass이고,
         # is_nounchunk_trigger() 함수에 걸리면 role3에 'chunk_subject'값 입력
@@ -1079,7 +992,7 @@ def apply_subject_adverb_chunk_range_symbol(parsed):
             continue
 
         line = symbols_by_level.setdefault(int(level), [" " for _ in range(line_length)])
-        nounchunk_trigger_type = get_nounchunk_type(token)
+        nounchunk_trigger_type = get_nounchunk_trigger_type(token)
 
         start_idx = token["idx"]
         head_idx = token.get("head_idx")
@@ -1760,8 +1673,11 @@ async def analyze(request: AnalyzeRequest):            # sentence를 받아 다�
     init_memorys(request.sentence)                     # 이 함수로 메모리 내용 채움 또는 초기화
     parsed = spacy_parsing_backgpt(request.sentence)               # GPT의 파싱결과를 parsed에 저장
     memory["parsed"] = parsed
-    apply_symbols(parsed)
+    chunk_info_list = assign_chunk_role2(parsed)
+    NounChunk_combine_apply_to_upverb(parsed)
     apply_subject_adverb_chunk_range_symbol(parsed)
+    apply_symbols(parsed)                              # parsed 결과에 따라 심볼들을 메모리에 저장장
+    apply_chunk_symbols_overwrite(chunk_info_list)
     draw_dot_bridge_across_verb_group(parsed)
     return {"sentence": request.sentence,
             "diagramming": symbols_to_diagram(request.sentence),

@@ -57,6 +57,38 @@ that이 on까지 자식으로 보기 때문에 살짝 이상함(그리 중허진
 
 
 
+  |             >
+I regret having told her the secret.
+  ◯______□                        ]
+         R.......ing_□_______□
+having told의 told에 완료 표시가 그려져야 함.
+
+   |      i
+He enjoys being praised.
+   ◯______□           ]
+          R.........ing
+being praised의 praised에 수동 표시가 그려져야함.
+
+
+  |     i
+I enjoy reading books.
+  ◯_____□
+        R...ing_□
+reading에 i표시 없이 아무것도 표시되지 않아야 함.
+
+i               |
+Watching movies affects my sleep.
+[             ] ◯__________□
+◯
+위와 마찬가지
+
+
+
+
+
+
+
+
 함수 기능 파악 후 함수의 순서 가장 적절하게 조정
 
 보정 함수의 경우 예문)을 꼭 주석으로 달아놓기
