@@ -97,7 +97,7 @@ level_trigger_deps = [
 is_subject_deps = [ "nsubj", "nsubjpass", "csubj"]
 
 all_nouchunk_types = {
-    "subclause_noun", "to.R_noun", "R.ing_ger_noun"
+    "subordinate_clause_noun", "to_infinitive_noun", "gerund_noun"
 }
 
 # 📘 보어가 **명사만** 가능한 SVOC 동사
@@ -763,129 +763,125 @@ def repair_level_within_prepositional_phrases(parsed):
     return parsed
 
 
-def get_subclause_verbals_type(token, all_tokens):
+def is_subordinate_clause(token, all_tokens):
+    if token.get("pos") != "VERB":
+        return False
+    if token.get("dep") not in {"ccomp", "xcomp", "advcl", "csubj"}:
+        return False
 
-    # 1️⃣ 종속절 (Subordinate Clause)
+    children = [t for t in all_tokens if t.get("head_idx") == token["idx"]]
+
+    # 종속접속사 역할의 SCONJ 찾기
+    has_sconj_marker = any(
+        c.get("dep") == "mark" and c.get("pos") == "SCONJ" and
+        c.get("text", "").lower() in {
+            "that", "if", "whether", "because", "although", "since", "when", "unless", "though", "as"
+        }
+        for c in children
+    )
+
+    return has_sconj_marker
+
+def is_to_infinitive(token, all_tokens):
+    if not (
+        token.get("pos") == "PART" and
+        token.get("tag") == "TO" and
+        token.get("text", "").lower() == "to"
+    ):
+        return False
+
+    # to 다음에 원형 동사(VB)가 바로 나오는지 확인
+    to_idx = token["idx"]
+    verb_after = next(
+        (t for t in all_tokens if t["idx"] > to_idx and t.get("pos") == "VERB" and t.get("tag") == "VB"),
+        None
+    )
+
+    return verb_after is not None
+
+def is_gerund(token):
+    # 핵심 조건
+    if token.get("morph", {}).get("VerbForm") == "Ger":
+        return True
+
+    # 보조 조건 조합 (극히 일부 예외 상황 보완용)
     if (
+        token.get("tag") == "VBG" and
         token.get("pos") == "VERB" and
-        token.get("dep") in {"ccomp", "xcomp", "advcl", "csubj"}
+        token.get("text", "").lower().endswith("ing")
     ):
-        children = [t for t in all_tokens if t.get("head_idx") == token["idx"]]
-        has_sconj_marker = any(
-            c.get("dep") in {"mark", "advmod"} and c.get("pos") == "SCONJ" and
-            c.get("text", "").lower() in {
-                "that", "if", "whether", "because", "although", "since",
-                "when", "unless", "though", "as"
-            }
-            for c in children
-        )
-        if has_sconj_marker:
-            return "subordinate_clause"
+        # 명사 역할 dep인 경우 (보완용)
+        if token.get("dep") in {"nsubj", "dobj", "obj", "pobj", "attr"}:
+            return True
 
-    # 2️⃣ to 부정사
-    if (
-        token.get("pos") == "PART" and token.get("tag") == "TO" and token.get("dep") == "aux"
-        and token.get("lemma", "").lower() == "to"
-    ):
-        to_idx = token["idx"]
-        verb_after = next(
-            (t for t in all_tokens if t["idx"] > to_idx and t.get("pos") == "VERB" and t.get("tag") == "VB"),
-            None
-        )
-        if verb_after:
-            return "to_infinitive"
+    return False
 
-    # 3️⃣ bare infinitive (TO 없이 동사 원형)
+def is_present_participle(token):
+    # 1️⃣ VBG인데 morph에 Gerund 표시가 없는 경우
+    if token.get("tag") != "VBG":
+        return False
+
+    verb_form = token.get("morph", {}).get("VerbForm")
+    if verb_form == "Ger":
+        return False  # 동명사는 제외
+
+    # 2️⃣ pos가 VERB이고, 현재분사로 쓰이는 dep 패턴
+    if token.get("pos") == "VERB" and token.get("dep") in {
+        "amod", "acl", "advcl", "xcomp", "ccomp", "conj"
+    }:
+        return True
+
+    return False
+
+def is_past_participle(token):
+    if token.get("tag") != "VBN":
+        return False  # 핵심 태그 아님
+
+    if token.get("pos") != "VERB":
+        return False  # 동사 아니면 제외
+
+    verb_form = token.get("morph", {}).get("VerbForm")
+    if verb_form and verb_form != "Part":
+        return False  # 명시적 Gerund 등은 제외
+
+    # dep는 보조 조건이므로 생략 가능, 필요한 경우 아래처럼 추가:
+    # if token.get("dep") not in {...}:
+    #     return False
+
+    return True
+
+
+def get_nounchunk_type(token):
     if (
-        token.get("pos") == "VERB" and
-        token.get("tag") == "VB" and
-        not any(
-            t.get("idx") == token["idx"] - 1 and
-            t.get("text", "").lower() == "to" and
-            t.get("tag") == "TO"
-            for t in all_tokens
-        )
+        token.get("pos") == "SCONJ" and token.get("dep") == "mark" and token.get("tag") == "IN"
     ):
-        return "bare_infinitive"
-    
-    # 4️⃣ 동명사
+        return "subordinate_clause_noun"  # 종속명사절
+
+    if (
+        token.get("pos") == "PART" and token.get("dep") == "aux" and token.get("tag") == "TO" and
+        token.get("lemma", "").lower() == "to"
+    ):
+        return "to_infinitive_noun"  # to부정사
+
     if (
         token.get("morph", {}).get("VerbForm") == "Ger" or
-        token.get("tag") == "VBG" and
-        token.get("text", "").lower().endswith("ing")
-        # token.get("dep") in {"nsubj", "dobj", "obj", "pobj", "attr"}
-    ):
-        return "gerund"  # 동명사
-
-    # 5️⃣ 현재분사
-    if token.get("tag") == "VBG":
-        verb_form = token.get("morph", {}).get("VerbForm")
-        if verb_form != "Ger":
-            if token.get("pos") == "VERB" and token.get("dep") in {
-                "amod", "acl", "advcl", "xcomp", "ccomp", "conj"
-            }:
-                return "present_participle"
-
-    # 6️⃣ 과거분사
-    if token.get("tag") == "VBN" and token.get("pos") == "VERB":
-        verb_form = token.get("morph", {}).get("VerbForm")
-        if not verb_form or verb_form == "Part":
-            return "past_participle"
-
-    # 7️⃣ reduced clause (분사구문)
-    if (
-        token.get("pos") == "VERB" and
-        token.get("dep") in {"advcl", "amod"} and
-        token.get("tag") in {"VBG", "VBN"}
-    ):
-        return "reduced_clause"
-
-    return None
-
-
-def get_chunks_partofspeech(token, all_tokens):
-
-    form_type = get_subclause_verbals_type(token, all_tokens)
-    dep = token.get("dep")
-
-    if form_type == "subordinate_clause" and dep in {"nsubj", "csubj", "obj", "dobj"}:
-        children = [t for t in all_tokens if t.get("head_idx") == token["idx"]]
-        has_noun_sconj = any(
-            c.get("pos") == "SCONJ" and
-            c.get("dep") == "mark" and
-            c.get("tag") == "IN" and
-            c.get("text", "").lower() in {"that", "if", "whether"}  # 명사절 전용 SCONJ
-            for c in children
+        (
+            token.get("tag") == "VBG" and "ing" in token.get("text", "").lower()
         )
-        if has_noun_sconj:
-            return "subclause_noun"
-        
-    if form_type == "subordinate_clause":
-        children = [t for t in all_tokens if t.get("head_idx") == token["idx"]]
-        has_adv_sconj = any(
-            c.get("pos") == "SCONJ" and
-            c.get("dep") in {"mark", "advmod"} and
-            c.get("tag") in {"IN", "WRB"} and
-            c.get("text", "").lower() in {
-                "because", "since", "although", "when", "while", "if", "unless", "as", "though"
-            }
-            for c in children
-        )
-        if has_adv_sconj:
-            return "subclause_adverb"
-
-    if form_type == "to_infinitive":
-        token["role2"] = "to infinitive"
-        if dep in {"nsubj", "csubj", "obj", "dobj"}: 
-            return "to.R_noun"
-
-    if form_type == "gerund":
-        token["role2"] = "gerund"
-        if token.get("dep") in {"nsubj", "csubj", "obj", "dobj", "pobj", "attr"}:
-            return "R.ing_ger_noun"
+    ):
+        return "gerund_noun"  # 동명사
 
     return None  # 해당사항 없으면 None
 
+def is_adverbchunk_type(token):
+
+    # 부사절 첫단어 트리거 조건 : SCONJ + mark/advmod + IN/WRB
+    if (
+        token.get("pos") == "SCONJ" and token.get("dep") in {"mark", "advmod"} and 
+        token.get("tag") in {"IN", "WRB"}
+    ):
+        return True
+    return False
 
 def assign_chunk_roles_and_drawsymbols(parsed):
 
@@ -908,42 +904,40 @@ def assign_chunk_roles_and_drawsymbols(parsed):
         if not head_token:
             continue
 
-        chunks_pos = get_chunks_partofspeech(token, parsed)
-
         token_dep = token.get("dep")
         head_dep = head_token.get("dep")
 
         # 부사덩어리 먼저 확정 : 덩어리요소 첫단어의 head의 dep가 advcl이고,
-        # chunks_pos == "subclause_adverb"이면 role3에 'chunk_adverb_modifier'값 입력
+        # is_adverbchunk_type() 함수에 걸리면 role3에 'chunk_adverb_modifier'값 입력
 
-        if (chunks_pos == "subclause_adverb" and token_dep == "advcl" or head_dep == "advcl"):
+        if (token_dep == "advcl" or head_dep == "advcl") and is_adverbchunk_type(token):
             token["role3"] = "chunk_adverb_modifier"
             continue  # ✅ 부사절이면 명사절 분기로 건너뜀
 
-        chunks_partofspeech = get_chunks_partofspeech(token, parsed)
+        nounchunk_trigger_type = get_nounchunk_type(token)
 
         # 주어 명사덩어리 그다음 확정 : 덩어리요소 첫단어의 head의 dep가 csubj, nsubj, nsubjpass이고,
         # is_nounchunk_trigger() 함수에 걸리면 role3에 'chunk_subject'값 입력
-        if (chunks_partofspeech and (token_dep in is_subject_deps) or (head_dep in is_subject_deps)):
-            print(f"[DEBUG-chunks_partofspeech 02 in assign_chunk_roles_and_drawsymbols] {chunks_partofspeech}")
+        if (nounchunk_trigger_type and (token_dep in is_subject_deps) or (head_dep in is_subject_deps)):
+            print(f"[DEBUG-nounchunk_trigger_type 02 in assign_chunk_roles_and_drawsymbols] {nounchunk_trigger_type}")
             token["role3"] = "chunk_subject"
             continue
 
         # 명사덩어리 판단 : '계층시작요소' 또는 '계층시작요소의 헤드'의 dep가(ccomp, xcomp) 이고, 
         # 계층시작요소가 is_nounchunk_trigger에 걸리면,
-        print(f"[DEBUG-chunks_partofspeech 01 in assign_chunk_roles_and_drawsymbols {chunks_partofspeech}")
+        print(f"[DEBUG-nounchunk_trigger_type 01 in assign_chunk_roles_and_drawsymbols {nounchunk_trigger_type}")
 
         if (
             (token_dep in {"ccomp", "xcomp"}) or (head_dep in {"ccomp", "xcomp"})
-            and chunks_partofspeech
+            and nounchunk_trigger_type
         ):
 
-            if chunks_partofspeech == "to.R_noun":  
+            if nounchunk_trigger_type == "to_infinitive_noun":  
                 token["role2"] = "to infinitive"
 
             if (
                 (token_dep in {"xcomp"}) or (head_dep in {"xcomp"})
-                and chunks_partofspeech == "R.ing_ger_noun"
+                and nounchunk_trigger_type == "gerund_noun"
             ):
                 token["role2"] = "gerund"
 
@@ -951,7 +945,7 @@ def assign_chunk_roles_and_drawsymbols(parsed):
             # to부정사(to infinitive)인 경우만 head의 head로 타고 올라가기
             head2_token = (
                 next((t for t in parsed if t["idx"] == head_token.get("head_idx")), None)
-                if chunks_partofspeech in {"to.R_noun", "subclause_noun"}
+                if nounchunk_trigger_type in {"to_infinitive_noun", "subordinate_clause_noun"}
                 else head_token
             )
             if not head2_token:
@@ -1088,7 +1082,7 @@ def apply_subject_adverb_chunk_range_symbol(parsed):
             continue
 
         line = symbols_by_level.setdefault(int(level), [" " for _ in range(line_length)])
-        chunks_partofspeech = get_chunks_partofspeech(token, parsed)
+        nounchunk_trigger_type = get_nounchunk_type(token)
 
         start_idx = token["idx"]
         head_idx = token.get("head_idx")
@@ -1109,7 +1103,7 @@ def apply_subject_adverb_chunk_range_symbol(parsed):
 
         # 동명사의 경우 gerund의 헤드의 자식을 이용해야하는데 gerund 범위 밖의 단어까지 포함되버림
         # 이 부분은 그 경우의 보정임. 예문) Watching movies affects my sleep.
-        if role3 == "chunk_subject" and chunks_partofspeech == "R.ing_ger_noun":
+        if role3 == "chunk_subject" and nounchunk_trigger_type == "gerund_noun":
             for i, child in enumerate(children_tokens):
                 if child.get("pos") == "VERB" and child["idx"] > token["idx"]:
                     if i > 0:
