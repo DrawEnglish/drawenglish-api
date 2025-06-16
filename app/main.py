@@ -19,7 +19,7 @@ client = OpenAI(api_key=api_key)
 app = FastAPI()  # FastAPI() 객체를 생성해서 이후 라우팅에 사용
 
 # 환경 변수에서 모델명 가져오기, 없으면 'en_core_web_sm' 기본값
-model_name = os.getenv("SPACY_MODEL", "en_core_web_sm")
+model_name = os.getenv("SPACY_MODEL", "en_core_web_trf")
 
 try:
     nlp = spacy.load(model_name)
@@ -1364,7 +1364,7 @@ def set_allverbchunk_attributes(parsed):
 # ◎ GPT 프롬프트 처리 함수
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
 
-    memory["used_gpt"] = False  # ✅ 기본값: GPT 미사용
+#    memory["used_gpt"] = False  # ✅ 기본값: GPT 미사용
     doc = nlp(sentence)
 
     prompt = f"""
@@ -1683,10 +1683,10 @@ def t(sentence: str):
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
 
-    if memory.get("used_gpt"):
-        print("⚠️ GPT가 파싱에 개입했음 (속도 느릴 수 있음)")
-    else:
-        print("✅ spaCy 규칙 기반으로 파싱 완료")
+#    if memory.get("used_gpt"):
+#        print("⚠️ GPT가 파싱에 개입했음 (속도 느릴 수 있음)")
+#    else:
+#        print("✅ spaCy 규칙 기반으로 파싱 완료")
 
    # NounChunk_combine_apply_to_upverb(parsed)
     apply_symbols(parsed)
@@ -1695,6 +1695,7 @@ def t(sentence: str):
 
     # ✅ morph 상세 출력
     print("\n📊 Full Token Info with Annotations:")
+    print(nlp.path)
     doc = nlp(sentence)
     for token in doc:
         morph = token.morph.to_dict()
