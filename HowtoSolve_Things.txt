@@ -83,6 +83,14 @@ Watching movies affects my sleep.
 위와 마찬가지
 
 
+To be honest helps build trust.
+[          ] ◯_____            
+   ◯__(            □           
+                   R.ing_□
+help는 사역동사 build는 원형부정사
+★계층유발요소 발생(0.5) 다음 문장중심동사(ROOT) 다음 또 계층유발요소(1.5)가 나오면
+그 요소는 1.5가 아닌 0.5로 설정하는거 검토 필요..
+
 
 
 

@@ -10,9 +10,11 @@ COPY requirements.txt .
 # 4. 의존성 설치
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. spaCy 모델 설치 (환경변수 SPACY_MODEL에 따라)
+# 5. spaCy 모델 설치
+#환경변수 SPACY_MODEL을 이용할때
 #RUN python -c "import os; import spacy; model = os.getenv('SPACY_MODEL', #'en_core_web_sm'); spacy.cli.download(model)"
-RUN python -m spacy download en_core_web_sm
+
+RUN python -m spacy download en_core_web_trf # 환경변수 미사용
 
 # 6. 앱 코드 복사
 COPY . .

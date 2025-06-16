@@ -1363,8 +1363,6 @@ def set_allverbchunk_attributes(parsed):
 
 # ◎ GPT 프롬프트 처리 함수
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
-
-    memory["used_gpt"] = False  # ✅ 기본값: GPT 미사용
     doc = nlp(sentence)
 
     prompt = f"""
@@ -1410,8 +1408,6 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
 
     # 조건: 규칙 기반 실패하거나, 강제로 GPT 사용 요청
     if not parsed or force_gpt:
-        memory["used_gpt"] = True  # ✅ GPT fallback 사용된 경우
-        # GPT 파싱 호출
         prompt = gpt_parsing_withprompt(tokens)  # 아래 2단계에서 만들 예정
 
         try:
@@ -1683,11 +1679,6 @@ def t(sentence: str):
     parsed = spacy_parsing_backgpt(sentence)
     memory["parsed"] = parsed
 
-    if memory.get("used_gpt"):
-        print("⚠️ GPT가 파싱에 개입했음 (속도 느릴 수 있음)")
-    else:
-        print("✅ spaCy 규칙 기반으로 파싱 완료")
-
    # NounChunk_combine_apply_to_upverb(parsed)
     apply_symbols(parsed)
     apply_subject_adverb_chunk_range_symbol(parsed)
@@ -1783,8 +1774,7 @@ async def analyze(request: AnalyzeRequest):            # sentence를 받아 다�
     draw_dot_bridge_across_verb_group(parsed)
     return {"sentence": request.sentence,
             "diagramming": symbols_to_diagram(request.sentence),
-            "verb_attribute": memory.get("verb_attribute", {}),
-            "used_gpt": memory.get("used_gpt", False)  # ✅ 결과 포함
+            "verb_attribute": memory.get("verb_attribute", {})
     }
 
 
