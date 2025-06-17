@@ -622,19 +622,9 @@ def assign_level_trigger_ranges(parsed):
     """
 
     current_level = 1  # 시작은 1부터 (0은 최상위 절용)
-    reset_after_root = False  # ✅ ROOT 이후 레벨 초기화 플래그
 
     for token in parsed:
         dep = token.get("dep")
-
-        if dep == "root":
-            reset_after_root = True
-            continue  # ROOT 자체는 level 트리거 아님
-
-        if reset_after_root:
-            current_level = 1
-            reset_after_root = False
-
         if dep not in level_trigger_deps:
             continue
         
@@ -655,8 +645,7 @@ def assign_level_trigger_ranges(parsed):
         # ✅ level 부여
         for t in parsed:
             if start_idx <= t["idx"] <= end_idx:
-                if t.get("level") is None:
-                    t["level"] = current_level
+                t["level"] = current_level
 
 ######################################## 신경을 써야할 특별예외처리 부분 ###################################
 
