@@ -41,6 +41,9 @@ t("She told me that She want to eat somthing.")
 cd /   ☜ C:/ 루트로 이동
 git clone https://github.com/DrawEnglish/drawenglish-api.git
 
+pip install -r requirements.txt
+  이 명령을 로컬에서 실행하면 requirements.txt에 입력된 구성요소들이 로컬에 설치됨
+
 
 ◆ Pytho에서 사용하는 정해진 특수 속성
 __name__	이 모듈의 이름 (__main__, spacy, 등)
