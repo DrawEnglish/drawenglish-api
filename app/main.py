@@ -811,8 +811,7 @@ def get_subclause_verbals_type(token, all_tokens):
     # 4️⃣ 동명사
     if (
         token.get("morph", {}).get("VerbForm") == "Ger" or
-        token.get("tag") == "VBG" and
-        token.get("text", "").lower().endswith("ing")
+        (token.get("tag") == "VBG" and token.get("text", "").lower().endswith("ing"))
         # token.get("dep") in {"nsubj", "dobj", "obj", "pobj", "attr"}
     ):
         return "gerund"  # 동명사
@@ -945,7 +944,8 @@ def assign_chunk_roles_and_drawsymbols(parsed):
                 (token_dep in {"xcomp"}) or (head_dep in {"xcomp"})
                 and chunks_partofspeech == "R.ing_ger_noun"
             ):
-                token["role2"] = "gerund"
+                token["role2"] = "gerund"   # ☜ 확인필요 아래 build를 gerund로 저장함
+                                            # To be honest helps build trust.
 
             # 계층시작요소의 유효한 head 찾아서 head값이 없으면 루프 빠져나감
             # to부정사(to infinitive)인 경우만 head의 head로 타고 올라가기
