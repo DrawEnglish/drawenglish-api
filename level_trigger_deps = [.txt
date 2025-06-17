@@ -1,0 +1,14 @@
+level_trigger_deps = [
+    "relcl", "acl", "advcl", "advmodcl", "ccomp", "xcomp", "csubj", "parataxis"
+]
+
+
+>>> t("I realized that she was serious because she was wrong.")
+
+was : ccomp
+was : advcl
+
+
+t("He told me that she wanted to eat something.")
+
+t("Although when he arrived she had already left, I realized that she was serious.")

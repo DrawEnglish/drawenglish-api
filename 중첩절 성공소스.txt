@@ -1,0 +1,73 @@
+중첩절 성공소스
+
+def assign_level_trigger_ranges(parsed):
+    """
+    종속절 트리거(relcl, acl, advcl, ccomp, xcomp 등)에 따라
+    해당 절 범위에 level 값을 부여한다.
+
+    ✅ 핵심 원리:
+    - 각 절 트리거로부터 덩어리(tokens + children) 수집
+    - 이전 덩어리들과 겹치면 그 덩어리의 모든 token level += 1
+    - 현재 절은 항상 동일한 기본 레벨: connector=0.5, 나머지=1
+    - 겹침이 없으면 shift도 발생하지 않음 → 단순 절은 기본 로직 그대로
+    """
+
+    clause_units = []
+    assigned_units = []
+
+    for token in parsed:
+        dep = token.get("dep")
+        if dep == "root":
+            continue  # 주절 제외
+        if dep in level_trigger_deps and is_valid_clause_trigger(token):
+            children = [t for t in parsed if t["head_idx"] == token["idx"]]
+            clause_tokens = [token] + children
+            indices = {t["idx"] for t in clause_tokens}
+
+            clause_units.append({
+                "tokens": clause_tokens,
+                "indices": indices,
+                "connector": min(clause_tokens, key=lambda x: x["idx"]),
+                "first_token": sorted(clause_tokens, key=lambda x: x["idx"])[0],
+            })
+
+    for unit in clause_units:
+        indices = unit["indices"]
+        tokens = unit["tokens"]
+        connector = unit["connector"]
+        first_token = unit["first_token"]
+
+        # 1️⃣ 이전 덩어리들과 겹치는 경우: 그 덩어리 레벨 전부 +1
+        for prev in assigned_units:
+            if indices & prev["indices"]:
+                for t in prev["tokens"]:
+                    if "level" in t:
+                        t["level"] += 1
+
+        # 2️⃣ 현재 절은 항상 동일한 기본 레벨
+        for t in tokens:
+            if "level" not in t:
+                t["level"] = 1
+        connector["level"] = 0.5
+
+        # 3️⃣ 특별 예외: 첫 토큰이 주어이고 TO가 있을 경우 보정
+        to_token = next((c for c in tokens if c.get("tag") == "TO"), None)
+        if first_token.get("dep") == "nsubj":
+            if to_token:
+                to_head_token = next((t for t in parsed if t["idx"] == to_token.get("head_idx")), None)
+                if to_head_token and to_head_token.get("dep") == "ccomp":
+                    to_token["level"] = 0.5
+                    first_token["level"] = 0
+                else:
+                    first_token["level"] = 0.5
+            else:
+                first_token["level"] = 0.5
+
+        assigned_units.append(unit)
+
+    # 4️⃣ 남아 있는 level=None 요소는 주절로 간주 → level=0
+    for t in parsed:
+        if t.get("level") is None:
+            t["level"] = 0
+
+    return parsed
