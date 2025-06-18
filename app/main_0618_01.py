@@ -661,10 +661,29 @@ def assign_level_trigger_ranges(parsed):
         b_range = clause_units[i + 1]["indices"]
         if a_range & b_range:
             is_nested = True
+            print("[DEBUG] is nest")
             break
 
     if is_nested:
-        return apply_nested_clause_shift(parsed, clause_units)
+        assigned_units = []
+
+        for unit in clause_units:
+            indices = unit["indices"]
+            tokens = unit["tokens"]
+            connector = unit["connector"]
+            first_token = unit["first_token"]
+
+            for prev in assigned_units:
+                if indices & prev["indices"]:
+                    for t in prev["tokens"]:
+                        if "level" in t:
+                            t["level"] += 1
+
+            for t in tokens:
+                if "level" not in t:
+                    t["level"] = 1
+            connector["level"] = 0.5
+
 
     # ✅ 중첩 아닌 경우 기존 방식대로 처리
     for unit in clause_units:
@@ -711,30 +730,33 @@ def apply_nested_clause_shift(parsed, clause_units):
     각 절의 시작 레벨을 이전 절들보다 +1씩 증가시키는 방식으로 적용한다.
     """
     assigned_units = []
+    current_level = 1
 
     for unit in clause_units:
         indices = unit["indices"]
         tokens = unit["tokens"]
         connector = unit["connector"]
         first_token = unit["first_token"]
-        print(indices)
-        print(tokens)
-        print(connector)
-        print("★★★★")
-        print(first_token)
-
-        for prev in assigned_units:
-            if indices & prev["indices"]:
-                for t in prev["tokens"]:
-                    if "level" in t:
-                        t["level"] += 1
 
         for t in tokens:
-            if "level" not in t:
-                t["level"] = 1
-        connector["level"] = 0.5
+            if "level" not in t or t["level"] < current_level:
+                t["level"] = current_level
+        connector["level"] = current_level - 0.5
+
+        to_token = next((c for c in tokens if c.get("tag") == "TO"), None)
+        if first_token.get("dep") == "nsubj":
+            if to_token:
+                to_head_token = next((t for t in parsed if t["idx"] == to_token.get("head_idx")), None)
+                if to_head_token and to_head_token.get("dep") == "ccomp":
+                    to_token["level"] = current_level - 0.5
+                    first_token["level"] = current_level - 1
+                else:
+                    first_token["level"] = current_level - 0.5
+            else:
+                first_token["level"] = current_level - 0.5
 
         assigned_units.append(unit)
+        current_level += 1
 
     for t in parsed:
         if t.get("level") is None:

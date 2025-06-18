@@ -97,6 +97,23 @@ I like eating.
 eating을 root로 잘못 태깅
 
 
+I want to meet you, and She wants to meet him.
+  ◯                 ◇       ◯
+       to....R_□
+                                  to....R_□
+등위접속사 다음 레벨을 조정해야함.
+
+
+Although he was tired, he kept working.
+<                   >     ◯
+◇           ◯___(              ◯
+                               R...ing
+
+Although I knew that she would arrive when the show began, I was still surprised.
+                                      <                 >    ◯_________(
+<               ◇                   >
+◇          ◯    ◇        ∩..........................◯
+                               ◯
 
 
 

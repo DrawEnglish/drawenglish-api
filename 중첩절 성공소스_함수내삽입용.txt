@@ -1,0 +1,22 @@
+중첩절 성공소스
+
+def assign_level_trigger_ranges(parsed):
+
+    assigned_units = []
+
+    for unit in clause_units:
+        indices = unit["indices"]
+        tokens = unit["tokens"]
+        connector = unit["connector"]
+        first_token = unit["first_token"]
+
+        for prev in assigned_units:
+            if indices & prev["indices"]:
+                for t in prev["tokens"]:
+                    if "level" in t:
+                        t["level"] += 1
+
+        for t in tokens:
+            if "level" not in t:
+                t["level"] = 1
+        connector["level"] = 0.5
