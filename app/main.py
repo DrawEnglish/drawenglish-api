@@ -612,154 +612,148 @@ def guess_combine(token, all_tokens):
 
 def assign_level_trigger_ranges(parsed):
     """
-    종속절 트리거(relcl, acl, advcl, ccomp, xcomp 등)에 따라
+    종속절을 담당하는 dep (relcl, acl, advcl, ccomp, xcomp)에 따라
     해당 절 범위에 level 값을 부여한다.
-
-    ✅ 핵심 원리:
-    - 중첩절이 아닌 경우: 기존 current_level 방식 사용
-    - 중첩절인 경우: apply_nested_clause_shift() 호출하여 전용 로직 적용
+    
+    - relcl, advcl, ccomp, xcomp: 해당 토큰 + children → 범위 계산
+    - acl: 해당 토큰부터 children 포함하여 범위 계산 (자기자신이 연결어)
+    
+    그리고 마지막에 level=None인 토큰들에 대해 level=0을 부여한다.
     """
 
-    current_level = 1
-    reset_after_root = False
-    clause_units = []
+    clause_units = []  # 절 정보 리스트
+    current_level = 1  # 시작은 1부터 (0은 최상위 절용)
+    reset_after_root = False  # ✅ ROOT 이후 레벨 초기화 플래그
+    prev_clause_indices = set()  # 이전 절 인덱스 저장용
 
     for token in parsed:
         dep = token.get("dep")
 
-        if dep.lower() == "root":
-            current_level = 1
-#            reset_after_root = True
-            continue
+        if dep == "root":
+            reset_after_root = True
+            continue  # ROOT 자체는 level 트리거 아님
 
-#        if reset_after_root:
-#            current_level = 1
-#            reset_after_root = False
+        if reset_after_root:
+            current_level = 1
+            reset_after_root = False
 
         if dep not in level_trigger_deps:
             continue
-
+        
         if not is_valid_clause_trigger(token):
             continue
 
+        
+
+        all_clause_indices = []  # 절 단위 인덱스 리스트들을 모아둠
         token_idx = token["idx"]
-        clause_tokens = [token]
+        clause_tokens = [token]  # 시작은 자기 자신 포함
+
+        # ✅ children도 절 범위에 포함
         children = [t for t in parsed if t["head_idx"] == token_idx]
         clause_tokens.extend(children)
 
-        clause_tokens.sort(key=lambda t: t["idx"])
-
-        indices = {t["idx"] for t in clause_tokens}
+        clause_tokens = [token] + children
+        clause_indices = sorted([t["idx"] for t in clause_tokens])
         clause_units.append({
+            "indices": clause_indices,
             "tokens": clause_tokens,
-            "indices": indices,
-            "connector": min(clause_tokens, key=lambda x: x["idx"]),
-            "first_token": clause_tokens[0],
+            "connector": token,
         })
 
-    # ✅ 중첩 여부 판단
-    is_nested = False
-    for i in range(len(clause_units)):
-        inner = clause_units[i]["indices"]
-        for j in range(len(clause_units)):
-            if i == j:
-                continue
-            outer = clause_units[j]["indices"]
-            if min(outer) < min(inner) and max(outer) > max(inner):
-                overlaps_with_others = any(
-                    inner & clause_units[k]["indices"]
-                    for k in range(len(clause_units))
-                    if k != i and k != j
-                )
-                if not overlaps_with_others:
-                    is_nested = True
-                break
-        if is_nested:
-            break
+        clause_indices = sorted([t["idx"] for t in clause_tokens])
+        all_clause_indices.append(clause_indices)
+        print(f"[DEBUG] {all_clause_indices}")
 
-    if is_nested:
-        return apply_nested_clause_shift(parsed, clause_units)
+        is_nested = any(
+            prev["indices"][0] < clause_indices[0] and prev["indices"][-1] > clause_indices[-1]
+            for prev in clause_units[:-1]  # 자기 자신 제외
+        )
 
-    # ✅ 중첩 아닌 경우 기존 방식대로 처리
-    for unit in clause_units:
-        tokens = unit["tokens"]
-        connector = unit["connector"]
-        first_token = unit["first_token"]
 
-        for t in tokens:
-            if t.get("level") is None or t["level"] < current_level:
-                t["level"] = current_level
+        # ✅ 절 범위 시작 ~ 끝 계산
+        start_idx = min(t["idx"] for t in clause_tokens)
+        end_idx = max(t["idx"] for t in clause_tokens)
 
+        clause_indices = sorted([t["idx"] for t in clause_tokens])
+        clause_indices_set = set(clause_indices)
+
+        # ✅ level 부여
+        for t in parsed:
+            if start_idx <= t["idx"] <= end_idx:
+                if (
+                    t.get("level") is None
+                    #or t["idx"] in prev_clause_indices  # 이전 절과 겹치는 경우만 덮어쓰기 허용
+                    or not is_nested
+                ):
+                    t["level"] = current_level
+        
+        prev_clause_indices = clause_indices_set
+
+######################################## 신경을 써야할 특별예외처리 부분 ###################################
+
+    ## 특별예외 : 계층발생 ccomp의 자식이 to부정사이고, to부정사의 주체인 앞단어를 nsubj로 태깅하는데,
+    #            nsubj가 덩어리요소 시작단어가 되버리는 경우 그 뒤 to를 시작단어(.5)로 수정하고
+    #            you는(.5)를 없앰 (예문 : I want you to succeed.)
+
+        # ✅ 단어덩어리 맨 앞 토큰 찾기
+        sorted_clause = sorted(clause_tokens, key=lambda x: x["idx"])
+        first_token = sorted_clause[0]
+
+        # 🔥 단어덩어리 맨 앞 단어가 nsubj인지 체크
         if first_token.get("dep") == "nsubj":
-            to_token = next((child for child in tokens if child.get("tag") == "TO"), None)
+            to_token = next((child for child in children if child.get("tag") == "TO"), None)
             if to_token:
                 to_head_idx = to_token.get("head_idx")
                 to_head_token = next((t for t in parsed if t["idx"] == to_head_idx), None)
+
                 if to_head_token and to_head_token.get('dep') == "ccomp":
+                    # 🎯 핵심: TO가 연결된 ccomp 절이면 레벨 설정
                     to_token["level"] = current_level - 0.5
                     first_token["level"] = current_level - 1
                 else:
+                    # 🎯 TO 없거나 조건 불충족 시, nsubj만 .5 레벨
                     first_token["level"] = current_level - 0.5
             else:
                 first_token["level"] = current_level - 0.5
 
             current_level += 1
             continue
+    # rule_base_parse() 함수에서는 you와 to의 role1을 입력함.
 
-        if connector.get("dep") == "acl":
-            connector["level"] = current_level - 0.5
+#######################################################################################################
+
+        # ✅ 연결어에는 .5 추가
+        if dep == "acl":
+            token["level"] = current_level - 0.5  # 연결어는 바로 이전 절에서 이어짐
         else:
+            # 연결어 후보: 절 범위 앞 단어 중 연결사 역할
+            connector = min(clause_tokens, key=lambda x: x["idx"])
             connector["level"] = current_level - 0.5
 
         current_level += 1
 
-        if t.get("dep", "").lower() == "root":
-            current_level = 1
+    for i in range(len(clause_units) - 1):
+        unit1 = clause_units[i]
+        unit2 = clause_units[i + 1]
+
+        first = unit1["indices"]
+        second = unit2["indices"]
+
+        if second[0] < first[0] and second[-1] > first[-1]:
+            # 안은 절 +1
+            for t in unit1["tokens"]:
+                if t.get("level") is not None:
+                    t["level"] += 1
+                    print("[DEBUG 디버그11111]")
+            # 안긴 절 -1 (겹치는 것 빼고)
+            for t in unit2["tokens"]:
+                if t["idx"] not in first and t.get("level") is not None:
+                    t["level"] -= 1
+                    print("[DEBUG 디버그22222]")
 
 
-    for t in parsed:
-        if t.get("level") is None:
-            t["level"] = 0
-
-    return parsed
-
-def apply_nested_clause_shift(parsed, clause_units):
-    """
-    중첩절이 존재할 경우에만 호출되며,
-    각 절의 시작 레벨을 이전 절들보다 +1씩 증가시키는 방식으로 적용한다.
-    """
-    assigned_units = []
-
-    for unit in clause_units:
-        indices = unit["indices"]
-        tokens = unit["tokens"]
-        connector = unit["connector"]
-        first_token = unit["first_token"]
-
-        for prev in assigned_units:
-            prev_indices = prev["indices"]
-            prev_start, prev_end = min(prev_indices), max(prev_indices)
-            curr_start, curr_end = min(indices), max(indices)
-
-            if prev_start > curr_start and prev_end < curr_end:
-                for t in prev["tokens"]:
-                    if "level" in t:
-                        t["level"] += 1
-
-        for t in tokens:
-            if "level" not in t:
-                t["level"] = 1
-        connector["level"] = 0.5
-
-        assigned_units.append(unit)
-
-        print(indices)
-#        print(tokens)
-#        print(connector)
-#        print("★★★★")
-#        print(first_token)
-#        print(unit)
-
+    # ✅ 최상위 절 level=None → level=0 으로 설정
     for t in parsed:
         if t.get("level") is None:
             t["level"] = 0

@@ -11,20 +11,24 @@ git add .
 git commit -m "Git Update General"
 git push origin main
 
-git pull origin main  # Git 리모트 변경사항을 로컬PC에 병합
+
+# Git 리모트 변경사항을 로컬PC에 병합
+git add .
+git commit -m "Git Update General"
+git pull origin main
+
 
 cd c:\drawenglish-api
 venv\Scripts\activate
-
 python
 from app.main import t, t1
+
 
 t("The man, who as well, left the room.")
 
 
 import importlib
 import app.main 
-
 importlib.reload(app.main)
 from app.main import t, t1
 
@@ -40,9 +44,6 @@ t("She told me that She want to eat somthing.")
 
 cd /   ☜ C:/ 루트로 이동
 git clone https://github.com/DrawEnglish/drawenglish-api.git
-
-pip install -r requirements.txt
-  이 명령을 로컬에서 실행하면 requirements.txt에 입력된 구성요소들이 로컬에 설치됨
 
 
 ◆ Pytho에서 사용하는 정해진 특수 속성
