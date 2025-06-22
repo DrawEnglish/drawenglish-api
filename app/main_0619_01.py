@@ -1448,7 +1448,9 @@ def set_allverbchunk_attributes(parsed):
         "main_verb": last["text"],
         "aspect": aspect,
         "voice": voice
-}
+    }
+
+    print(chains)
 
 # ◎ GPT 프롬프트 처리 함수
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):

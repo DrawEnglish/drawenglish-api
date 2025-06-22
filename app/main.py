@@ -735,6 +735,8 @@ def assign_level_trigger_ranges(parsed):
                     t["level"] = t["level"] + 1
 
     # [2] 안긴절이 안은절을 완전히 포함하는 경우 → 안은절 +1, 안긴절 -1
+    # 예문 : Although when he arrived she had already left, I realized that she was serious.
+
     for i in range(len(all_clause_indices) - 1):    # i는 0부터 1까지(덩어리가 3개일 경우)
         first = all_clause_indices[i]               # first는 앞덩어리
         second = all_clause_indices[i + 1]          # second는 뒤덩어리
@@ -844,12 +846,9 @@ def get_subclause_verbals_type(token, all_tokens):
         token.get("pos") == "PART" and token.get("tag") == "TO" and token.get("dep") == "aux"
         and token.get("lemma", "").lower() == "to"
     ):
-        to_idx = token["idx"]
-        verb_after = next(
-            (t for t in all_tokens if t["idx"] > to_idx and t.get("pos") == "VERB" and t.get("tag") == "VB"),
-            None
-        )
-        if verb_after:
+        head_idx = token.get("head_idx")
+        head_token = next((t for t in all_tokens if t["idx"] == head_idx), None)
+        if head_token and head_token.get("pos") == "VERB" and head_token.get("tag") in {"VB", "VBG", "VBN"}:
             return "to_infinitive"
 
     # 3️⃣ bare infinitive (TO 없이 동사 원형)
@@ -981,13 +980,13 @@ def assign_chunk_roles_and_drawsymbols(parsed):
         # 주어 명사덩어리 그다음 확정 : 덩어리요소 첫단어의 head의 dep가 csubj, nsubj, nsubjpass이고,
         # is_nounchunk_trigger() 함수에 걸리면 role3에 'chunk_subject'값 입력
         if (chunks_partofspeech and (token_dep in is_subject_deps) or (head_dep in is_subject_deps)):
-            print(f"[DEBUG-chunks_partofspeech 02 in assign_chunk_roles_and_drawsymbols] {chunks_partofspeech}")
+            print(f"[DEBUG] chunks_partofspeech 02 in assign_chunk_roles_and_drawsymbols {chunks_partofspeech}")
             token["role3"] = "chunk_subject"
             continue
 
         # 명사덩어리 판단 : '계층시작요소' 또는 '계층시작요소의 헤드'의 dep가(ccomp, xcomp) 이고, 
         # 계층시작요소가 is_nounchunk_trigger에 걸리면,
-        print(f"[DEBUG-chunks_partofspeech 01 in assign_chunk_roles_and_drawsymbols {chunks_partofspeech}")
+        print(f"[DEBUG] chunks_partofspeech 01 in assign_chunk_roles_and_drawsymbols {chunks_partofspeech}")
 
         if (
             (token_dep in {"ccomp", "xcomp"} or head_dep in {"ccomp", "xcomp"})
@@ -1389,6 +1388,8 @@ def set_allverbchunk_attributes(parsed):
 
     all_symbol_maps = {}
 
+    print(f"{chains} ■■■■ ")
+
     # 각 chain 분석
     for chain in chains:
         if not chain:
@@ -1415,7 +1416,7 @@ def set_allverbchunk_attributes(parsed):
         "main_verb": last["text"],
         "aspect": aspect,
         "voice": voice
-}
+    }
 
 # ◎ GPT 프롬프트 처리 함수
 def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
