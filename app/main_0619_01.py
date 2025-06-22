@@ -621,10 +621,10 @@ def assign_level_trigger_ranges(parsed):
     그리고 마지막에 level=None인 토큰들에 대해 level=0을 부여한다.
     """
 
-    clause_units = []  # 함수 맨 위에서 초기화
+    clause_units = []  # 절 정보 리스트
     current_level = 1  # 시작은 1부터 (0은 최상위 절용)
     reset_after_root = False  # ✅ ROOT 이후 레벨 초기화 플래그
-    all_clause_indices = []  # 절 단위 인덱스 리스트들을 모아둠
+    prev_clause_indices = set()  # 이전 절 인덱스 저장용
 
     for token in parsed:
         dep = token.get("dep")
@@ -643,26 +643,74 @@ def assign_level_trigger_ranges(parsed):
         if not is_valid_clause_trigger(token):
             continue
 
+        
+
+        all_clause_indices = []  # 절 단위 인덱스 리스트들을 모아둠
         token_idx = token["idx"]
         clause_tokens = [token]  # 시작은 자기 자신 포함
 
+        # ✅ children도 절 범위에 포함
         children = [t for t in parsed if t["head_idx"] == token_idx]
         clause_tokens.extend(children)
 
+        clause_tokens = [token] + children
         clause_indices = sorted([t["idx"] for t in clause_tokens])
- 
+        
         all_clause_indices.append(clause_indices)
+    
+        print(f"[DEBUG] {all_clause_indices}")
+
+        #is_nested = any(
+        #    prev["indices"]
+        #    and prev["indices"][0] < clause_indices[0] and prev["indices"][-1] > clause_indices[-1]
+        #    for prev in clause_units[:-1]  # 자기 자신 제외
+        #)
+
+        for prev_unit in clause_units:
+            prev_indices = prev_unit["indices"]
+            overlap = set(clause_indices) & set(prev_indices)
+            if overlap:
+                # 우선순위 판단: 누가 먼저 시작했는지
+                if clause_indices[0] < prev_indices[0]:
+                    # 현재 clause가 먼저니까, 현재 clause에서 중복 제거
+                    clause_tokens = [t for t in clause_tokens if t["idx"] not in overlap]
+                    clause_indices = sorted([t["idx"] for t in clause_tokens])
+                else:
+                    # 이전 clause에서 중복 제거
+                    prev_unit["tokens"] = [t for t in prev_unit["tokens"] if t["idx"] not in overlap]
+                    prev_unit["indices"] = sorted([t["idx"] for t in prev_unit["tokens"]])
+
+        clause_indices = sorted([t["idx"] for t in clause_tokens])
 
         # ✅ 절 범위 시작 ~ 끝 계산
+        if not clause_tokens:
+            continue  # 혹시 다 지워졌으면 skip
         start_idx = min(t["idx"] for t in clause_tokens)
         end_idx = max(t["idx"] for t in clause_tokens)
+
+        clause_units.append({
+            "indices": clause_indices,
+            "tokens": clause_tokens,
+            "connector": token,
+        })
+
+        print(f"[DEBUG] {all_clause_indices}")
+        print(f"[DEBUG 시작 끝] {start_idx} {end_idx}")
+
+        clause_indices = sorted([t["idx"] for t in clause_tokens])
+        clause_indices_set = set(clause_indices)
 
         # ✅ level 부여
         for t in parsed:
             if start_idx <= t["idx"] <= end_idx:
-                if t.get("level") is None:
+                if (
+                    t.get("level") is None
+                    #or t["idx"] in prev_clause_indices  # 이전 절과 겹치는 경우만 덮어쓰기 허용
+                    #or not is_nested
+                ):
                     t["level"] = current_level
-
+        
+        prev_clause_indices = clause_indices_set
 
 ######################################## 신경을 써야할 특별예외처리 부분 ###################################
 
@@ -707,48 +755,33 @@ def assign_level_trigger_ranges(parsed):
 
         current_level += 1
 
+    for i in range(len(clause_units) - 1):
+        unit1 = clause_units[i]
+        unit2 = clause_units[i + 1]
+
+        first = unit1["indices"]
+        second = unit2["indices"]
+
+        if not first or not second:
+            continue
+
+        if second[0] < first[0] and second[-1] > first[-1]:
+            # 안은 절 +1
+            for t in unit1["tokens"]:
+                if t.get("level") is not None:
+                    t["level"] += 1
+                    print(f"[DEBUG 디버그11111] {current_level}")
+            # 안긴 절 -1 (겹치는 것 빼고)
+            for t in unit2["tokens"]:
+                if t["idx"] not in first and t.get("level") is not None:
+                    t["level"] -= 1
+                    print(f"[DEBUG 디버그22222] {current_level}")
+
+
     # ✅ 최상위 절 level=None → level=0 으로 설정
     for t in parsed:
         if t.get("level") is None:
             t["level"] = 0
-
-    print(f"[DEBUG] {all_clause_indices}")
-
-     # [1] 겹치는 인덱스에 대해 후속 절(j)의 level을 +1 보정 (단, 안긴절이 안은절을 완전히 포함할 경우 제외)
-    # 해당 예문) He told me that she wanted to eat something. (eat가 상하위덩어리 겹침)
-    for i in range(len(all_clause_indices)):            # i는 0부터 2까지(덩어리가 3개일 경우)
-        for j in range(i + 1, len(all_clause_indices)): # j는 1 부터 2까지
-            first = all_clause_indices[i]               # first는 앞쪽 덩어리
-            second = all_clause_indices[j]              # secon는 뒤쪽 덩어리
-
-            # ✅ 겹치는 요소가 있는지 확인
-            overlap = set(first) & set(second)
-
-            # ✅ second가 first를 완전히 감싸고 있으면 이 보정은 skip (→ 아래 보정에 맡김)
-            if (second[0] < first[0] and second[-1] > first[-1]) and overlap:
-                continue  # 건너뛴다
-
-            # ✅ 중복된 idx에 대해 후속 절의 level +1 보정
-            for idx in overlap:
-                t = next((tok for tok in parsed if tok["idx"] == idx), None)
-                if t and isinstance(t.get("level"), int):
-                    t["level"] = t["level"] + 1
-
-    # [2] 안긴절이 안은절을 완전히 포함하는 경우 → 안은절 +1, 안긴절 -1
-    for i in range(len(all_clause_indices) - 1):    # i는 0부터 1까지(덩어리가 3개일 경우)
-        first = all_clause_indices[i]               # first는 앞덩어리
-        second = all_clause_indices[i + 1]          # second는 뒤덩어리
-
-        if second[0] < first[0] and second[-1] > first[-1]:
-            # ✅ 안은 절 (first) +1
-            for t in parsed:
-                if t["idx"] in first and t.get("level") is not None:
-                    t["level"] += 1
-
-            # ✅ 안긴 절 (second) -1 (겹치는 것 빼고)
-            for t in parsed:
-                if t["idx"] in second and t["idx"] not in first and t.get("level") is not None:
-                    t["level"] -= 1
 
     return parsed
 

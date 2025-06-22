@@ -1,3 +1,8 @@
+level_trigger_deps = [
+    "relcl", "acl", "advcl", "advmodcl", "ccomp", "xcomp", "csubj", "parataxis"
+]
+
+
 She named her dog Max.
     ◯_____________□
 
@@ -116,6 +121,11 @@ Although I knew that she would arrive when the show began, I was still surprised
                                ◯
 
 
+I think she knows that he lied.
+  ◯
+            ◯     ◇
+                  ◇       ◯
+접속사 that이 생략된 경우
 
 
 
