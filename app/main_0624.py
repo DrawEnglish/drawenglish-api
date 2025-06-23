@@ -927,24 +927,11 @@ def get_chunks_partofspeech(token, all_tokens):
         )
         if has_adv_sconj:
             return "subclause_adverb"
-        
 
     if form_type == "to_infinitive":
         token["role2"] = "to infinitive"
-
-        head_idx = token.get("head_idx")
-        head_token = next((t for t in all_tokens if t["idx"] == head_idx), None)
-        head_dep = head_token.get("dep") if head_token else None
-
-        if head_dep in {"csubj"}:
+        if dep in {"nsubj", "csubj", "obj", "dobj"}: 
             return "to.R_noun"
-        elif head_dep in {"xcomp", "ccomp"}:
-            return "to.R_noun.adj_dontcare"
-        elif head_dep in {"relcl"}:
-            return "to.R_adjective"
-        elif head_dep in {"advcl"}:
-            return "to.R_adverb"
-        
 
     if form_type == "gerund":
         token["role2"] = "gerund"
