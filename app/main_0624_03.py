@@ -930,7 +930,7 @@ def get_chunks_partofspeech(token, all_tokens):
         
 
     if form_type == "to_infinitive":
-        token["role2"] = "to_infinitive"
+        token["role2"] = "to infinitive"
 
         head_idx = token.get("head_idx")
         head_token = next((t for t in all_tokens if t["idx"] == head_idx), None)
@@ -966,8 +966,8 @@ def assign_chunks_type_pos_role23(parsed):
         morph = token.get("morph", {})
         text = token.get("text", "").lower()
 
-        role2 = token.get("role1")
-        role3 = token.get("role1")
+        role2 = None
+        role3 = None
 
         # 1️⃣ subordinate clause
         if pos == "VERB" and dep in {"ccomp", "xcomp", "advcl", "csubj"}:
@@ -981,7 +981,7 @@ def assign_chunks_type_pos_role23(parsed):
                 for c in children
             )
             if has_sconj_marker:
-                role2 = "subclause"
+                role2 = "subordinate_clause"
 
                 # ✅ 명사절 여부
                 if dep in {"nsubj", "csubj", "obj", "dobj"}:
@@ -1036,7 +1036,7 @@ def assign_chunks_type_pos_role23(parsed):
         elif morph.get("VerbForm") == "Ger" or (tag == "VBG" and text.endswith("ing")):
             role2 = "gerund"
             if dep in {"nsubj", "csubj", "obj", "dobj", "pobj", "attr"}:
-                role3 = "R.ing_noun"
+                role3 = "R.ing_ger_noun"
 
         # 5️⃣ 현재분사
         elif tag == "VBG" and morph.get("VerbForm") != "Ger":
@@ -1059,9 +1059,9 @@ def assign_chunks_type_pos_role23(parsed):
 
 def assign_chunk_roles_and_drawsymbols(parsed):
 
-    all_subject_complements = {
-        "noun subject complement", "adjective subject complement"
-    }
+#    all_subject_complements = {
+#        "noun subject_complement", "adjective subject_complement"
+#    }
 
     assign_chunks_type_pos_role23(parsed)
 
@@ -1080,45 +1080,50 @@ def assign_chunk_roles_and_drawsymbols(parsed):
         if not head_token:
             continue
 
-#        chunks_pos = get_chunks_partofspeech(token, parsed)
+        chunks_pos = get_chunks_partofspeech(token, parsed)
 
         token_dep = token.get("dep")
         head_dep = head_token.get("dep")
 
-        token_role2 = token.get("role2")
-        token_role3 = token.get("role3")
-
         # 부사덩어리 먼저 확정 : 덩어리요소 첫단어의 head의 dep가 advcl이고,
         # chunks_pos == "subclause_adverb"이면 role3에 'chunk_adverb_modifier'값 입력
 
-        if (token_role3 in {"subclause_adverb", "to.R_adverb"} 
-            and token_dep == "advcl" or head_dep == "advcl"):
-            token["role1"] = "chunk_adv_modifier"
-            continue
+        if (chunks_pos == "subclause_adverb" and token_dep == "advcl" or head_dep == "advcl"):
+            token["role3"] = "chunk_adverb_modifier"
+            continue  # ✅ 부사절이면 명사절 분기로 건너뜀
 
-#        chunks_partofspeech = get_chunks_partofspeech(token, parsed)
+        chunks_partofspeech = get_chunks_partofspeech(token, parsed)
 
         # 주어 명사덩어리 그다음 확정 : 덩어리요소 첫단어의 head의 dep가 csubj, nsubj, nsubjpass이고,
         # is_nounchunk_trigger() 함수에 걸리면 role3에 'chunk_subject'값 입력
-        if (token_role3 in {"subclause_noun", "to.R_noun", "R.ing_noun"} 
-            and (token_dep in is_subject_deps) or (head_dep in is_subject_deps)):
-            print(f"[DEBUG] chunks_partofspeech 02 in assign_chunk_roles_and_drawsymbols {token_role3}")
-            token["role1"] = "chunk_subject"
+        if (chunks_partofspeech and (token_dep in is_subject_deps) or (head_dep in is_subject_deps)):
+            print(f"[DEBUG] chunks_partofspeech 02 in assign_chunk_roles_and_drawsymbols {chunks_partofspeech}")
+            token["role3"] = "chunk_subject"
             continue
 
         # 명사덩어리 판단 : '계층시작요소' 또는 '계층시작요소의 헤드'의 dep가(ccomp, xcomp) 이고, 
         # 계층시작요소가 is_nounchunk_trigger에 걸리면,
-        print(f"[DEBUG] chunks_partofspeech 01 in assign_chunk_roles_and_drawsymbols {token_role3}")
+        print(f"[DEBUG] chunks_partofspeech 01 in assign_chunk_roles_and_drawsymbols {chunks_partofspeech}")
 
         if (
             (token_dep in {"ccomp", "xcomp"} or head_dep in {"ccomp", "xcomp"})
-            and token_role3
+            and chunks_partofspeech
         ):
+            if chunks_partofspeech == "to.R_noun":  
+                token["role2"] = "to infinitive"
+
+            if (
+                (token_dep in {"xcomp"} or head_dep in {"xcomp"})
+                and chunks_partofspeech == "R.ing_ger_noun"
+            ):
+                token["role2"] = "gerund"   # ☜ 확인필요 아래 build를 gerund로 저장함
+                                            # To be honest helps build trust.
+
             # 계층시작요소의 유효한 head 찾아서 head값이 없으면 루프 빠져나감
             # to부정사(to infinitive)인 경우만 head의 head로 타고 올라가기
             head2_token = (
                 next((t for t in parsed if t["idx"] == head_token.get("head_idx")), None)
-                if token_role3 in {"subclause_noun", "to.R_noun"}
+                if chunks_partofspeech in {"to.R_noun", "subclause_noun"}
                 else head_token
             )
             if not head2_token:
@@ -1156,7 +1161,7 @@ def assign_chunk_roles_and_drawsymbols(parsed):
             # 앞 모든 조건에 안걸리면 명사덩어리 첫단어의 rele1에 'object'(목적어) 값 저장
             else:
                 token["role3"] = "chunk_not_decide"
-#                token["role1"] = "object"
+                token["role1"] = "object"
 
 
         # ✅ # 현토큰의 head의 children들 모음 (끝 토큰 찾기 + 시작 토큰 info)
@@ -1194,7 +1199,7 @@ def assign_chunk_roles_and_drawsymbols(parsed):
             line[end_idx_adjusted] = chunk_end_mark
 
         # ✅ to infinitive → to.o...R
-        if token.get("role2") == "to_infinitive":
+        if token.get("role2") == "to infinitive":
             verb_token = next(
                 (t for t in parsed
                  if t["idx"] > start_idx and
@@ -1246,8 +1251,8 @@ def apply_subject_adverb_chunk_range_symbol(parsed):
     symbols_by_level = memory["symbols_by_level"]
 
     for token in parsed:
-        role1 = token.get("role1")
-        if not role1:
+        role3 = token.get("role3")
+        if not role3:
             continue
 
         level = token.get("level")
@@ -1255,6 +1260,7 @@ def apply_subject_adverb_chunk_range_symbol(parsed):
             continue
 
         line = symbols_by_level.setdefault(int(level), [" " for _ in range(line_length)])
+        chunks_partofspeech = get_chunks_partofspeech(token, parsed)
 
         start_idx = token["idx"]
         head_idx = token.get("head_idx")
@@ -1275,7 +1281,7 @@ def apply_subject_adverb_chunk_range_symbol(parsed):
 
         # 동명사의 경우 gerund의 헤드의 자식을 이용해야하는데 gerund 범위 밖의 단어까지 포함되버림
         # 이 부분은 그 경우의 보정임. 예문) Watching movies affects my sleep.
-        if role1 == "chunk_subject" and role1 == "R.ing_noun":
+        if role3 == "chunk_subject" and chunks_partofspeech == "R.ing_ger_noun":
             for i, child in enumerate(children_tokens):
                 if child.get("pos") == "VERB" and child["idx"] > token["idx"]:
                     if i > 0:
@@ -1290,9 +1296,9 @@ def apply_subject_adverb_chunk_range_symbol(parsed):
         end_idx_adjusted = end_idx + len(end_token["text"]) - 1
 
         # ✅ role3에 따라 심볼 다르게
-        if role1 == "chunk_subject":
+        if role3 == "chunk_subject":
             left, right = "[", "]"
-        elif role1 == "chunk_adv_modifier":
+        elif role3 == "chunk_adverb_modifier":
             left, right = "<", ">"
         else:
             continue
