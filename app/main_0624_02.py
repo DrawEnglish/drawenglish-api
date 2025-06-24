@@ -954,89 +954,11 @@ def get_chunks_partofspeech(token, all_tokens):
     return None  # 해당사항 없으면 None
 
 
-def assign_chunks_type_pos_role23(parsed):
-    for token in parsed:
-        level = token.get("level")
-        if not (isinstance(level, float) and level % 1 == 0.5):
-            continue  # ⬅️ 덩어리 시작 요소만 처리
-
-        dep = token.get("dep")
-        pos = token.get("pos")
-        tag = token.get("tag")
-        morph = token.get("morph", {})
-        text = token.get("text", "").lower()
-
-        role2 = None
-        role3 = None
-
-        # 1️⃣ 종속절
-        if pos == "VERB" and dep in {"ccomp", "xcomp", "advcl", "csubj"}:
-            children = [t for t in parsed if t.get("head_idx") == token["idx"]]
-            has_sconj_marker = any(
-                c.get("dep") in {"mark", "advmod"} and c.get("pos") == "SCONJ" and
-                c.get("text", "").lower() in {
-                    "that", "if", "whether", "because", "although", "since",
-                    "when", "unless", "though", "as"
-                }
-                for c in children
-            )
-            if has_sconj_marker:
-                role2 = "subordinate_clause"
-
-        # 2️⃣ to부정사
-        elif pos == "PART" and tag == "TO" and dep == "aux" and text == "to":
-            head_token = next((t for t in parsed if t["idx"] == token.get("head_idx")), None)
-            if head_token and head_token.get("pos") == "VERB" and head_token.get("tag") in {"VB", "VBG", "VBN"}:
-                role2 = "to_infinitive"
-                head_dep = head_token.get("dep")
-
-                if head_dep == "csubj":
-                    role3 = "to.R_noun"
-                elif head_dep in {"xcomp", "ccomp"}:
-                    role3 = "to.R_noun.adj_dontcare"
-                elif head_dep == "relcl":
-                    role3 = "to.R_adjective"
-                elif head_dep == "advcl":
-                    role3 = "to.R_adverb"
-
-        # 3️⃣ bare infinitive
-        elif pos == "VERB" and tag == "VB":
-            prev_token = next((t for t in parsed if t["idx"] == token["idx"] - 1), None)
-            if not (prev_token and prev_token.get("text", "").lower() == "to"):
-                role2 = "bare_infinitive"
-
-        # 4️⃣ gerund
-        elif morph.get("VerbForm") == "Ger" or (tag == "VBG" and text.endswith("ing")):
-            role2 = "gerund"
-            if dep in {"nsubj", "csubj", "obj", "dobj", "pobj", "attr"}:
-                role3 = "R.ing_ger_noun"
-
-        # 5️⃣ 현재분사
-        elif tag == "VBG" and morph.get("VerbForm") != "Ger":
-            if pos == "VERB" and dep in {"amod", "acl", "advcl", "xcomp", "ccomp", "conj"}:
-                role2 = "present_participle"
-
-        # 6️⃣ 과거분사
-        elif tag == "VBN" and pos == "VERB":
-            if morph.get("VerbForm") in {None, "Part"}:
-                role2 = "past_participle"
-
-        # 7️⃣ reduced clause
-        if pos == "VERB" and dep in {"advcl", "amod"} and tag in {"VBG", "VBN"}:
-            role2 = "reduced_clause"
-
-        # ✅ 결과 저장
-        token["role2"] = role2
-        token["role3"] = role3
-
-
 def assign_chunk_roles_and_drawsymbols(parsed):
 
-#    all_subject_complements = {
-#        "noun subject_complement", "adjective subject_complement"
-#    }
-
-    assign_chunks_type_pos_role23(parsed)
+    all_subject_complements = {
+        "noun subject_complement", "adjective subject_complement"
+    }
 
     line_length = memory["sentence_length"]
     symbols_by_level = memory["symbols_by_level"]
