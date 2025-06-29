@@ -276,7 +276,7 @@ def guess_role(t, all_tokens=None):  # all_tokens 추가 필요
             return "prepositional object"
     
     # ✅ Conjunction or Clause Marker (접속사)
-    if dep in ["cc", "mark"] or pos in ["CCONJ", "CONJ", "SCONJ"]:
+    if dep in ["cc", "mark"]:
         return "conjunction"
 
     # ✅ Subject Complement (SVC 구조)
@@ -821,24 +821,23 @@ def repair_level_within_prepositional_phrases(parsed):
     return parsed
 
 
-def get_chunk_types(token, all_tokens):
-
-    head_idx = token.get("head_idx")
-    head_token = next((t for t in all_tokens if t["idx"] == head_idx), None)
+def get_subclause_verbals_type(token, all_tokens):
 
     # 1️⃣ 종속절 (Subordinate Clause)
     if (
-        head_token.get("pos") in {"VERB", "AUX"} and
-        head_token.get("dep") in {"ccomp", "xcomp", "advcl", "csubj"}
+        token.get("pos") == "VERB" and
+        token.get("dep") in {"ccomp", "xcomp", "advcl", "csubj"}
     ):
-        if (
-            token.get("dep") in {"mark", "advmod"} and
-            token.get("pos") == "SCONJ" and
-            token.get("text", "").lower() in {
+        children = [t for t in all_tokens if t.get("head_idx") == token["idx"]]
+        has_sconj_marker = any(
+            c.get("dep") in {"mark", "advmod"} and c.get("pos") == "SCONJ" and
+            c.get("text", "").lower() in {
                 "that", "if", "whether", "because", "although", "since",
                 "when", "unless", "though", "as"
             }
-        ):
+            for c in children
+        )
+        if has_sconj_marker:
             return "subordinate_clause"
 
     # 2️⃣ to 부정사
@@ -846,6 +845,8 @@ def get_chunk_types(token, all_tokens):
         token.get("pos") == "PART" and token.get("tag") == "TO" and token.get("dep") == "aux"
         and token.get("lemma", "").lower() == "to"
     ):
+        head_idx = token.get("head_idx")
+        head_token = next((t for t in all_tokens if t["idx"] == head_idx), None)
         if head_token and head_token.get("pos") in {"VERB", "AUX"} and head_token.get("tag") in {"VB", "VBG", "VBN"}:
             return "to_infinitive"
 
@@ -893,48 +894,39 @@ def get_chunk_types(token, all_tokens):
     ):
         return "reduced_clause"
 
-#    return None
+    return None
 
 
-def get_chunk_types_and_pos(token, all_tokens):
+def get_chunks_partofspeech(token, all_tokens):
 
-    form_type = get_chunk_types(token, all_tokens)
-
+    form_type = get_subclause_verbals_type(token, all_tokens)
     dep = token.get("dep")
-    head_idx = token.get("head_idx")
-    head_token = next((t for t in all_tokens if t["idx"] == head_idx), None)
-    head_dep = head_token.get("dep")
 
-
+    if form_type == "subordinate_clause" and dep in {"nsubj", "csubj", "obj", "dobj"}:
+        children = [t for t in all_tokens if t.get("head_idx") == token["idx"]]
+        has_noun_sconj = any(
+            c.get("pos") == "SCONJ" and
+            c.get("dep") == "mark" and
+            c.get("tag") == "IN" and
+            c.get("text", "").lower() in {"that", "if", "whether"}  # 명사절 전용 SCONJ
+            for c in children
+        )
+        if has_noun_sconj:
+            return "subclause_noun"
+        
     if form_type == "subordinate_clause":
-        token["role2"] = "subordinate_clause"
-
-        head_children = [t for t in all_tokens if t.get("head_idx") == head_token["idx"]]
-        print(head_children)
-
-        if head_dep in {"nsubj", "csubj", "ccomp", "obj", "dobj"}:
-            has_noun_sconj = any(
-                c.get("pos") == "SCONJ" and
-                c.get("dep") == "mark" and
-                c.get("tag") == "IN" and
-                c.get("text", "").lower() in {"that", "if", "whether"}  # 명사절 전용 SCONJ
-                for c in head_children
-            )
-            if has_noun_sconj:
-                return "subclause_noun"
-
-        if head_dep in {"advcl"}:
-            has_adv_sconj = any(
-                c.get("pos") == "SCONJ" and
-                c.get("dep") in {"mark", "advmod"} and
-                c.get("tag") in {"IN", "WRB"} and
-                c.get("text", "").lower() in {
-                    "because", "since", "although", "when", "while", "if", "unless", "as", "though"
-                }
-                for c in head_children
-            )
-            if has_adv_sconj:
-                return "subclause_adverb"
+        children = [t for t in all_tokens if t.get("head_idx") == token["idx"]]
+        has_adv_sconj = any(
+            c.get("pos") == "SCONJ" and
+            c.get("dep") in {"mark", "advmod"} and
+            c.get("tag") in {"IN", "WRB"} and
+            c.get("text", "").lower() in {
+                "because", "since", "although", "when", "while", "if", "unless", "as", "though"
+            }
+            for c in children
+        )
+        if has_adv_sconj:
+            return "subclause_adverb"
         
     if form_type == "to_infinitive":
         token["role2"] = "to_infinitive"
@@ -958,28 +950,119 @@ def get_chunk_types_and_pos(token, all_tokens):
         if token.get("dep") in {"nsubj", "csubj", "obj", "dobj", "pobj", "attr"}:
             return "R.ing_ger_noun"
 
-#    return None  # 해당사항 없으면 None
+    return None  # 해당사항 없으면 None
 
 
-def assign_chunks_role23(parsed):
+def assign_chunks_type_pos_role23(parsed):
     for token in parsed:
         level = token.get("level")
         if not (isinstance(level, float) and level % 1 == 0.5):
             continue  # ⬅️ 덩어리 시작요소만 처리
 
-        chunk_pos = get_chunk_types_and_pos(token, parsed)
+        dep = token.get("dep")
+        pos = token.get("pos")
+        tag = token.get("tag")
+        morph = token.get("morph", {})
+        text = token.get("text", "").lower()
 
-        if chunk_pos:
-            token["role3"] = chunk_pos
+        role2 = token.get("role1")
+        role3 = token.get("role1")
+
+        # 1️⃣ subordinate clause
+        if pos == "VERB" and dep in {"ccomp", "xcomp", "advcl", "csubj"}:
+            children = [t for t in parsed if t.get("head_idx") == token["idx"]]
+            has_sconj_marker = any(
+                c.get("dep") in {"mark", "advmod"} and c.get("pos") == "SCONJ" and
+                c.get("text", "").lower() in {
+                    "that", "if", "whether", "because", "although", "since",
+                    "when", "unless", "though", "as"
+                }
+                for c in children
+            )
+            if has_sconj_marker:
+                role2 = "subclause"
+
+                # ✅ 명사절 여부
+                if dep in {"nsubj", "csubj", "obj", "dobj"}:
+                    has_noun_sconj = any(
+                        c.get("pos") == "SCONJ" and
+                        c.get("dep") == "mark" and
+                        c.get("tag") == "IN" and
+                        c.get("text", "").lower() in {"that", "if", "whether"}
+                        for c in children
+                    )
+                    if has_noun_sconj:
+                        role3 = "subclause_noun"
+
+                # ✅ 부사절 여부
+                if not role3:
+                    has_adv_sconj = any(
+                        c.get("pos") == "SCONJ" and
+                        c.get("dep") in {"mark", "advmod"} and
+                        c.get("tag") in {"IN", "WRB"} and
+                        c.get("text", "").lower() in {
+                            "because", "since", "although", "when", "while", "if",
+                            "unless", "as", "though"
+                        }
+                        for c in children
+                    )
+                    if has_adv_sconj:
+                        role3 = "subclause_adverb"
+
+        # 2️⃣ to-infinitive
+        elif pos == "PART" and tag == "TO" and dep == "aux" and text == "to":
+            head_token = next((t for t in parsed if t["idx"] == token.get("head_idx")), None)
+            if head_token and head_token.get("pos") == "VERB" and head_token.get("tag") in {"VB", "VBG", "VBN"}:
+                role2 = "to_infinitive"
+                head_dep = head_token.get("dep")
+
+                if head_dep == "csubj":
+                    role3 = "to.R_noun"
+                elif head_dep in {"xcomp", "ccomp"}:
+                    role3 = "to.R_noun.adj_dontcare"
+                elif head_dep == "relcl":
+                    role3 = "to.R_adjective"
+                elif head_dep == "advcl":
+                    role3 = "to.R_adverb"
+
+        # 3️⃣ bare infinitive
+        elif pos == "VERB" and tag == "VB":
+            prev_token = next((t for t in parsed if t["idx"] == token["idx"] - 1), None)
+            if not (prev_token and prev_token.get("text", "").lower() == "to"):
+                role2 = "bare_infinitive"
+
+        # 4️⃣ gerund
+        elif morph.get("VerbForm") == "Ger" or (tag == "VBG" and text.endswith("ing")):
+            role2 = "gerund"
+            if dep in {"nsubj", "csubj", "obj", "dobj", "pobj", "attr"}:
+                role3 = "R.ing_noun"
+
+        # 5️⃣ 현재분사
+        elif tag == "VBG" and morph.get("VerbForm") != "Ger":
+            if pos == "VERB" and dep in {"amod", "acl", "advcl", "xcomp", "ccomp", "conj"}:
+                role2 = "present_participle"
+
+        # 6️⃣ 과거분사
+        elif tag == "VBN" and pos == "VERB":
+            if morph.get("VerbForm") in {None, "Part"}:
+                role2 = "past_participle"
+
+        # 7️⃣ reduced clause (분사구문)
+        if pos == "VERB" and dep in {"advcl", "amod"} and tag in {"VBG", "VBN"}:
+            role2 = "reduced_clause"
+
+        # ✅ 결과 저장
+        token["role2"] = role2
+        token["role3"] = role3
 
 
-def assign_chunk_se_and_drawsymbols(parsed):
+def assign_chunk_roles_and_drawsymbols(parsed):
 
     all_subject_complements = {
         "noun subject complement", "adjective subject complement"
     }
 
-    assign_chunks_role23(parsed)
+    assign_chunks_type_pos_role23(parsed)
 
     line_length = memory["sentence_length"]
     symbols_by_level = memory["symbols_by_level"]
@@ -996,6 +1079,8 @@ def assign_chunk_se_and_drawsymbols(parsed):
         if not head_token:
             continue
 
+#        chunks_pos = get_chunks_partofspeech(token, parsed)
+
         token_dep = token.get("dep")
         head_dep = head_token.get("dep")
 
@@ -1010,17 +1095,19 @@ def assign_chunk_se_and_drawsymbols(parsed):
             token["role1"] = "chunk_adv_modifier"
             continue
 
+#        chunks_partofspeech = get_chunks_partofspeech(token, parsed)
+
         # 주어 명사덩어리 그다음 확정 : 덩어리요소 첫단어의 head의 dep가 csubj, nsubj, nsubjpass이고,
         # is_nounchunk_trigger() 함수에 걸리면 role3에 'chunk_subject'값 입력
         if (token_role3 in {"subclause_noun", "to.R_noun", "R.ing_noun"} 
             and (token_dep in is_subject_deps) or (head_dep in is_subject_deps)):
-            print(f"[DEBUG] chunks_partofspeech 02 in chunk_drawsymbols {token_role3}")
+            print(f"[DEBUG] chunks_partofspeech 02 in assign_chunk_roles_and_drawsymbols {token_role3}")
             token["role1"] = "chunk_subject"
             continue
 
         # 명사덩어리 판단 : '계층시작요소' 또는 '계층시작요소의 헤드'의 dep가(ccomp, xcomp) 이고, 
         # 계층시작요소가 is_nounchunk_trigger에 걸리면,
-        print(f"[DEBUG] chunks_partofspeech 01 in chunk_drawsymbols {token_role3}")
+        print(f"[DEBUG] chunks_partofspeech 01 in assign_chunk_roles_and_drawsymbols {token_role3}")
 
         if (
             (token_dep in {"ccomp", "xcomp"} or head_dep in {"ccomp", "xcomp"})
@@ -1509,7 +1596,7 @@ def spacy_parsing_backgpt(sentence: str, force_gpt: bool = False):
             print("[RAW CONTENT]", content if 'content' in locals() else '[No response]')
             return []
 
-    assign_chunk_se_and_drawsymbols(parsed)  # ★★★★ 위의 assign_level_trigger_ranges() 함수 위로 갈 수 없다.
+    assign_chunk_roles_and_drawsymbols(parsed)  # ★★★★ 위의 assign_level_trigger_ranges() 함수 위로 갈 수 없다.
                                                 # 그래서 guess_combine_second()를 한번 더 호출한다.
 
     # ✅ 📍 level 보정: prep-pobj 레벨 통일
